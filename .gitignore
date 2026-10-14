@@ -1,0 +1,13 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+# IDE
+.idea/
+# Gradle
+gradle/
+*.kts
+# Exfiltrated data
+exfiltrated_data/
+# Logs
+*.log

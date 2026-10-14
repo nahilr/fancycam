@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  EDUCATIONAL DEMO - Android Security & Forensics Course
+  Enables cleartext HTTP traffic to the sandbox C2 server.
+  In production apps, this would be HTTPS-only.
+-->
+<network-security-config>
+    <!-- Allow cleartext HTTP for lab C2 server communication -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- For educational analysis - accept all certificates -->
+            <!-- In production, pin specific certificates only -->
+        </trust-anchors>
+    </base-config>
+</network-security-config>
