@@ -11,3 +11,12 @@ gradle/
 exfiltrated_data/
 # Logs
 *.log
+
+# Android Studio build artifacts
+.gradle/
+app/build/
+build/
+gradle.properties
+gradlew
+gradlew.bat
+local.properties

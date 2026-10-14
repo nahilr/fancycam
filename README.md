@@ -28,63 +28,67 @@ FancyCam is a camera app that demonstrates common Android malware techniques for
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Android Device (Emulator)                │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐  │
+│                     Android Device (Emulator)               │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
 │  │ MainActivity                                          │  │
-│  │  - CameraX preview & photo capture                   │  │
+│  │  - CameraX preview & photo capture                    │  │
 │  │  - Permission management (12 permissions)             │  │
-│  │  - WorkManager periodic task scheduling              │  │
-│  │  - NotificationListenerService binding               │  │
-│  └──────────┬─────────────────────────────────────────────┘  │
-│             │                                                 │
-│  ┌──────────▼─────────────────────────────────────────────┐  │
+│  │  - WorkManager periodic task scheduling               │  │
+│  │  - NotificationListenerService binding                │  │
+│  │  - Long press on app title → Settings menu            │  │
+│  └──────────┬────────────────────────────────────────────┘  │
+│             │                                               │
+│  ┌──────────▼────────────────────────────────────────────┐  │
 │  │ DataExfilSender (Singleton)                           │  │
-│  │  1. Device fingerprinting                              │  │
-│  │  2. SMS retrieval (content://sms)                      │  │
+│  │  1. Device fingerprinting                             │  │
+│  │  2. SMS retrieval (content://sms)                     │  │
 │  │  3. Contact harvesting (ContactsContract)             │  │
-│  │  4. Call log extraction (CallLog.Calls)                │  │
+│  │  4. Call log extraction (CallLog.Calls)               │  │
 │  │  5. Location tracking (LocationManager)               │  │
 │  │  6. Clipboard monitoring (ClipboardManager)           │  │
 │  │  7. WiFi scanning (WifiManager)                       │  │
 │  │  8. Microphone capture (MediaRecorder)                │  │
 │  │  9. Notification listening (NotificationListener)     │  │
 │  │ 10. Network operator info (TelephonyManager)          │  │
-│  └──────────┬─────────────────────────────────────────────┘  │
-│             │                                                 │
-│  ┌──────────▼─────────────────────────────────────────────┐  │
+│  └──────────┬────────────────────────────────────────────┘  │
+│             │                                               │
+│  ┌──────────▼────────────────────────────────────────────┐  │
 │  │ WorkManager Workers                                   │  │
-│  │  - DataCollectionWorker (periodic, 15 min)           │  │
+│  │  - DataCollectionWorker (periodic, 15 min)            │  │
 │  │  - ScreenCaptureWorker (placeholder)                  │  │
-│  │  - PhotoUploadWorker (one-time photo upload)         │  │
-│  └──────────┬─────────────────────────────────────────────┘  │
-│             │                                                 │
-└─────────────┼─────────────────────────────────────────────────┘
+│  │  - PhotoUploadWorker (one-time photo upload)          │  │
+│  └──────────┬────────────────────────────────────────────┘  │
+│             │                                               │
+└─────────────┼───────────────────────────────────────────────┘
               │ HTTP POST (JSON / multipart)
               │ adb reverse tcp:5000 tcp:5000
               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  Flask C2 Server (Host)                     │
-│                                                              │
-│  Web Dashboard (http://localhost:5000)                       │
+│                                                             │
+│  Web Dashboard (http://localhost:5000)                      │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │ Stats | Event Feed | Device Info | Contacts |       │   │
-│  │ Call Logs | SMS | Location | WiFi | Audio | Screens  │   │
+│  │ Left Sidebar: Connected Devices & Stats              │   │
+│  │ Right Tabs: Overview | JSON | Screenshots | Audio    │   │
+│  │         | Events | Manual Triggers                   │   │
 │  └──────────────────────────────────────────────────────┘   │
-│                                                              │
-│  API Endpoints:                                              │
-│  GET  /                    -> HTML dashboard                 │
-│  GET  /api/status          -> collection statistics          │
-│  GET  /api/events          -> live event feed                 │
-│  GET  /api/latest          -> latest JSON payload            │
-│  POST /exfil/json          -> receive device data            │
-│  POST /exfil/screenshot    -> receive screenshot             │
-│  POST /exfil/audio         -> receive audio                  │
-│                                                              │
-│  Storage: exfiltrated_data/                                  │
-│    ├── json_data/     -> device_data_*.json                  │
-│    ├── screenshots/   -> screenshot_*.png                    │
-│    └── audio/         -> audio_*.m4a                         │
+│                                                             │
+│  API Endpoints:                                             │
+│  GET  /                    -> HTML dashboard (from template)│
+│  GET  /api/status          -> collection statistics         │
+│  GET  /api/events          -> live event feed               │
+│  GET  /api/latest          -> latest JSON payload           │
+│  POST /api/trigger/screenshot -> manual screenshot trigger  │
+│  POST /api/trigger/audio   -> manual audio recording trigger│
+│  POST /exfil/json          -> receive device data           │
+│  POST /exfil/screenshot    -> receive screenshot            │
+│  POST /exfil/audio         -> receive audio                 │
+│                                                             │
+│  Storage: exfiltrated_data/                                 │
+│    ├── json_data/     -> device_data_*.json                 │
+│    ├── screenshots/   -> screenshot_*.png                   │
+│    └── audio/         -> audio_*.m4a                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -199,21 +203,33 @@ curl http://localhost:5000/api/events
 
 The C2 server provides a real-time monitoring dashboard at `http://localhost:5000`:
 
-| Section | Content |
-|---|---|
-| **Statistics** | Payload count, screenshots, audio files, events |
-| **Event Feed** | Real-time log of all exfiltration events with timestamps |
-| **Device Info** | Android ID, brand, model, manufacturer, SDK version, fingerprint |
-| **Raw JSON** | Complete pretty-printed payload for analysis |
-| **Contacts** | Name, phone numbers, email addresses |
-| **Call Logs** | Name, number, duration, call type (incoming/outgoing/missed) |
-| **SMS Messages** | Sender, body content, timestamp |
-| **Location** | GPS coordinates, provider, accuracy |
-| **WiFi Networks** | SSID, BSSID, signal strength |
-| **Audio** | Playable recordings with file info |
-| **Screenshots** | Clickable image thumbnails |
+### Dashboard Layout (Two-Column Design)
 
-Dashboard auto-refreshes every 5 seconds.
+**Left Sidebar - Connected Devices:**
+- Device list with connection status
+- Quick stats: JSON payloads, screenshots, audio files
+
+**Right Panel - Tabbed Interface:**
+| Tab | Content |
+|---|---|
+| **Overview** | Statistics cards, latest device info |
+| **JSON Payloads** | Recent payloads list, raw JSON viewer |
+| **Screenshots** | Thumbnail gallery with full-size view |
+| **Audio Files** | Playable recordings with metadata |
+| **Events** | Real-time event feed with timestamps |
+
+### Manual Trigger Buttons (Dashboard)
+| Button | Action | Endpoint |
+|---|---|---|
+| 📸 Take Screenshot | Triggers device screenshot capture | `POST /api/trigger/screenshot` |
+| 🎙️ Record Audio (30s) | Triggers 30-second audio recording | `POST /api/trigger/audio` |
+
+### Dashboard Features
+- Auto-refreshes every 5 seconds
+- Real-time event logging
+- Clickable screenshots for full-size view
+- Audio player with native controls
+- Pretty-printed JSON payload viewer
 
 ## Data Collection Capabilities
 
@@ -483,6 +499,8 @@ fancycam/
 │   └── wrapper/                      # Gradle wrapper
 ├── local.properties                  # SDK path
 ├── flask_c2_server.py                # C2 server with web dashboard
+├── templates/
+│   └── dashboard.html                # Dashboard UI template (21KB)
 ├── exfiltrated_data/                 # Received data storage
 │   ├── json_data/                    # JSON payloads
 │   ├── screenshots/                  # Screenshot images
@@ -526,6 +544,45 @@ fun startCaptureAndExfiltrate(context: Context, durationMs: Long = 30000L)
 ```
 
 Change `30000L` to adjust recording length in milliseconds.
+
+### Photo Save Location
+
+**File:** `app/src/main/java/com/example/fancycam/MainActivity.kt`
+
+Photos are saved to the DCIM/Camera directory:
+
+```kotlin
+val dcimDir = File(Environment.getExternalStorageDirectory(), "Camera")
+val photoFile = File(dcimDir, "IMG_$timestamp.jpg")
+```
+
+## New Features (v2.0)
+
+### Two-Column Dashboard UI
+The web dashboard now uses a two-column layout:
+- **Left Sidebar**: Connected devices list with quick stats
+- **Right Panel**: Tabbed interface (Overview, JSON, Screenshots, Audio, Events)
+
+### Manual Trigger Endpoints
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/trigger/screenshot` | POST | Triggers device screenshot capture |
+| `/api/trigger/audio` | POST | Triggers 30-second audio recording |
+
+### Template-Based HTML Rendering
+The Flask server now loads the dashboard HTML from `templates/dashboard.html` instead of inline triple-quoted strings. This allows:
+- Independent HTML/CSS editing
+- Better version control
+- Easier maintenance
+
+### Long Press Settings Menu
+Long-press the "FancyCam" title bar to open an in-app settings menu with:
+- Server location configuration
+- Connectivity status check
+- About information
+
+### DCIM Photo Storage
+Captured photos are now saved to the system DCIM/Camera directory instead of app cache, making them visible in the gallery app.
 
 ## Troubleshooting
 

