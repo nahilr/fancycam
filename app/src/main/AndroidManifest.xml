@@ -66,6 +66,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:parentActivityName=".MainActivity" />
+
         <!-- Notification listener service for educational analysis -->
         <service
             android:name=".NotificationReaderService"

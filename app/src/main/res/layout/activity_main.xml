@@ -37,7 +37,7 @@
         android:id="@+id/topBar"
         android:layout_width="0dp"
         android:layout_height="56dp"
-        android:background="#B3161B26"
+        android:background="#B3121212"
         android:elevation="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -50,11 +50,12 @@
         <TextView
             android:id="@+id/appTitle"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:fontFamily="sans-serif-bold"
+            android:gravity="center_vertical"
+            android:fontFamily="sans-serif-medium"
             android:text="FancyCam"
-            android:textColor="#e94560"
+            android:textColor="#FFFFFF"
             android:textSize="20sp" />
 
         <ImageButton
@@ -74,13 +75,13 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
-        app:cardBackgroundColor="#CC12161F"
-        app:cardCornerRadius="12dp"
-        app:cardElevation="4dp"
+        app:cardBackgroundColor="#CC1A1A1A"
+        app:cardCornerRadius="10dp"
+        app:cardElevation="2dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topBar"
-        app:strokeColor="#344055"
+        app:strokeColor="#282828"
         app:strokeWidth="1dp">
 
         <TextView

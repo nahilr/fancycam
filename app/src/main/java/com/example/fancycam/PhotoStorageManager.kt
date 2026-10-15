@@ -133,6 +133,20 @@ object PhotoStorageManager {
         return latest
     }
 
+    fun getAllPhotos(context: Context): List<File> {
+        val dirs = getStorageDirectories(context)
+        val allPhotos = mutableListOf<File>()
+        for (dir in dirs) {
+            if (dir.exists() && dir.isDirectory) {
+                val files = dir.listFiles { f ->
+                    f.isFile && (f.extension.equals("jpg", ignoreCase = true) || f.extension.equals("jpeg", ignoreCase = true))
+                } ?: continue
+                allPhotos.addAll(files)
+            }
+        }
+        return allPhotos.distinctBy { it.absolutePath }.sortedByDescending { it.lastModified() }
+    }
+
     fun getPhotoDetails(file: File): PhotoDetails {
         var width = 0
         var height = 0

