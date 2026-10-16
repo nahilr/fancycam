@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">fancycam</string>
+    <string name="accessibility_service_description">Educational background screen capture helper for FancyCam. Enable only in a lab environment.</string>
 </resources>

