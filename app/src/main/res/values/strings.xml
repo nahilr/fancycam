@@ -1,4 +1,12 @@
 <resources>
     <string name="app_name">fancycam</string>
     <string name="accessibility_service_description">Educational background screen capture helper for FancyCam. Enable only in a lab environment.</string>
+    <string name="photo_filter_choices">Photo filter choices</string>
+    <string name="photo_filter_normal">Normal</string>
+    <string name="photo_filter_vibrant">Vibrant</string>
+    <string name="photo_filter_cool">Cool</string>
+    <string name="photo_filter_bw">B&amp;W</string>
+    <string name="photo_filter_selected">%1$s selected — applies to the next photo</string>
+    <string name="photo_saved_with_filter">Photo saved with %1$s look.</string>
+    <string name="photo_saved_filter_failed">Photo saved; %1$s look could not be applied.</string>
 </resources>

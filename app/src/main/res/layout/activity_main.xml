@@ -95,6 +95,70 @@
             android:textSize="13sp" />
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- Select the look applied to the next photo capture. -->
+    <HorizontalScrollView
+        android:id="@+id/filterScroll"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:background="#B30A0C10"
+        android:contentDescription="@string/photo_filter_choices"
+        android:fillViewport="false"
+        android:overScrollMode="never"
+        android:scrollbars="none"
+        app:layout_constraintBottom_toTopOf="@id/bottomControls"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/filterGroup"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            app:chipSpacingHorizontal="8dp"
+            app:singleLine="true"
+            app:singleSelection="true">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipFilterNormal"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:checkable="true"
+                android:checked="true"
+                android:minWidth="64dp"
+                android:text="@string/photo_filter_normal" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipFilterVibrant"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:checkable="true"
+                android:minWidth="72dp"
+                android:text="@string/photo_filter_vibrant" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipFilterCool"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:checkable="true"
+                android:minWidth="64dp"
+                android:text="@string/photo_filter_cool" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipFilterBw"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:checkable="true"
+                android:minWidth="64dp"
+                android:text="@string/photo_filter_bw" />
+        </com.google.android.material.chip.ChipGroup>
+    </HorizontalScrollView>
+
     <!-- Bottom Controls Area -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/bottomControls"

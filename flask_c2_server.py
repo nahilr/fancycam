@@ -39,6 +39,7 @@ import json
 import time
 import shutil
 import uuid
+import argparse
 from datetime import datetime
 
 app = Flask(__name__)
@@ -955,11 +956,28 @@ def receive_audio():
 # =========================================================================
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Run the FancyCam educational lab server.')
+    parser.add_argument(
+        '--host',
+        default='0.0.0.0',
+        help='address to bind (default: 0.0.0.0)',
+    )
+    parser.add_argument(
+        '--port',
+        type=int,
+        default=5000,
+        choices=range(1, 65536),
+        metavar='1-65535',
+        help='port to listen on (default: 5000)',
+    )
+    args = parser.parse_args()
+
     print("=" * 60)
     print("  FANCYCAM C2 SERVER - EDUCATIONAL DASHBOARD")
     print("  For sandboxed lab environments only")
     print("=" * 60)
-    print(f"  Dashboard:  http://localhost:5000")
+    display_host = 'localhost' if args.host == '0.0.0.0' else args.host
+    print(f"  Dashboard:  http://{display_host}:{args.port}")
     print(f"  Storage:    {os.path.abspath(DATA_DIR)}")
     print("=" * 60)
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    app.run(host=args.host, port=args.port, debug=False, threaded=True)

