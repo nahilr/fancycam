@@ -199,11 +199,20 @@ def resolve_data_path(filename):
     return target
 
 
-def count_type_files(type_name):
+def count_type_files(type_name, device_id=None):
     total = 0
     for root, _dirs, files in os.walk(DATA_DIR):
-        if os.path.basename(root) == type_name:
-            total += len(files)
+        if os.path.basename(root) != type_name:
+            continue
+        parent_device = os.path.basename(os.path.dirname(root))
+        rel_root = os.path.relpath(root, DATA_DIR).replace(os.sep, '/')
+        parts = rel_root.split('/')
+        if len(parts) <= 1:
+            parent_device = 'unknown'
+        if device_id and device_id not in ('all', 'null', 'None', ''):
+            if parent_device != device_id:
+                continue
+        total += len(files)
     return total
 
 
@@ -293,16 +302,23 @@ def health():
 
 @app.route('/api/status')
 def api_status():
-    """Return collection statistics as JSON."""
-    json_count = count_type_files('json_data')
-    img_count = count_type_files('screenshots')
-    photo_count = count_type_files('photos')
-    audio_count = count_type_files('audio')
+    """Return collection statistics as JSON.
+
+    Optional `device` query parameter scopes the per-type counters to a single
+    device's directory. This keeps the dashboard's tab counts consistent with
+    the device/data that is actually shown.
+    """
+    target_device = request.args.get('device')
+    json_count = count_type_files('json_data', target_device)
+    img_count = count_type_files('screenshots', target_device)
+    photo_count = count_type_files('photos', target_device)
+    audio_count = count_type_files('audio', target_device)
     devs = api_devices().json or []
     online_count = sum(1 for d in devs if d.get('is_online'))
     return jsonify({
         'status': 'online',
         'timestamp': datetime.now().isoformat(),
+        'device_id': target_device,
         'json_received': json_count,
         'screenshots_received': img_count,
         'photos_received': photo_count,

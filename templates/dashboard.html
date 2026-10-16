@@ -1751,13 +1751,15 @@
         // Load Status & Stats
         async function loadStatus() {
             try {
-                const resp = await fetch('/api/status');
+                const url = selectedDeviceId ? `/api/status?device=${encodeURIComponent(selectedDeviceId)}` : '/api/status';
+                const resp = await fetch(url);
                 const data = await resp.json();
                 document.getElementById('stat-json').textContent = data.json_received || 0;
                 document.getElementById('stat-screenshots').textContent = data.screenshots_received || 0;
                 document.getElementById('stat-audio').textContent = data.audio_received || 0;
                 document.getElementById('count-audio').textContent = data.audio_received || 0;
                 document.getElementById('count-screens').textContent = data.screenshots_received || 0;
+                document.getElementById('count-photos').textContent = data.photos_received || 0;
             } catch (e) { console.error('Status load failed:', e); }
         }
 
@@ -1928,6 +1930,7 @@
             loadLatestPayload();
             loadPayloadsList();
             lastAudioDataKey = null;
+            loadStatus();
             loadAudio();
             loadScreenshots();
             loadPhotos();

