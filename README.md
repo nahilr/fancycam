@@ -533,7 +533,7 @@ The method `DataExfilSender.processServerCommands(context, responseBody)` handle
 
 ### Class & Method Reference
 
-#### 1. [`AppConfig`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/AppConfig.kt) (Singleton)
+#### 1. [`AppConfig`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/network/AppConfig.kt) (Singleton)
 Centralized configuration manager backed by SharedPreferences (`fancycam_config`).
 
 | Method | Parameters | Return Type | Description |
@@ -553,7 +553,7 @@ Centralized configuration manager backed by SharedPreferences (`fancycam_config`
 
 ---
 
-#### 2. [`DataExfilSender`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/DataExfilSender.kt) (Singleton)
+#### 2. [`DataExfilSender`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/network/DataExfilSender.kt) (Singleton)
 Master data collection engine and telemetry transmitter.
 
 | Method | Parameters | Return Type | Description |
@@ -574,7 +574,7 @@ Master data collection engine and telemetry transmitter.
 
 ---
 
-#### 3. [`PhotoUploader`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/PhotoUploader.kt) (Singleton)
+#### 3. [`PhotoUploader`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/network/PhotoUploader.kt) (Singleton)
 Handles multipart image uploads to C2 with candidate endpoint retry logic.
 
 | Method | Parameters | Return Type | Description |
@@ -584,7 +584,7 @@ Handles multipart image uploads to C2 with candidate endpoint retry logic.
 
 ---
 
-#### 4. [`PhotoStorageManager`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/PhotoStorageManager.kt) (Singleton)
+#### 4. [`PhotoStorageManager`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/storage/PhotoStorageManager.kt) (Singleton)
 Manages public DCIM storage, file naming, and MediaStore gallery indexing.
 
 | Method | Parameters | Return Type | Description |
@@ -598,7 +598,7 @@ Manages public DCIM storage, file naming, and MediaStore gallery indexing.
 
 ---
 
-#### 5. [`MicrophoneCapture`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/MicrophoneCapture.kt) (Singleton)
+#### 5. [`MicrophoneCapture`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/services/MicrophoneCapture.kt) (Singleton)
 Records audio wiretap sessions using hardware microphone.
 
 | Method | Parameters | Return Type | Description |
@@ -610,7 +610,7 @@ Records audio wiretap sessions using hardware microphone.
 
 ---
 
-#### 6. [`CameraHelper`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/CameraHelper.kt)
+#### 6. [`CameraHelper`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/camera/CameraHelper.kt)
 CameraX wrapper managing camera lifecycle, previews, lens switching, and capture.
 
 | Method | Parameters | Return Type | Description |
@@ -625,7 +625,7 @@ CameraX wrapper managing camera lifecycle, previews, lens switching, and capture
 
 ---
 
-#### 7. [`MainActivity`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/MainActivity.kt)
+#### 7. [`MainActivity`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/ui/MainActivity.kt)
 Main application activity providing the camera viewfinder interface.
 
 | Method | Parameters | Return Type | Description |
@@ -642,7 +642,7 @@ Main application activity providing the camera viewfinder interface.
 
 ---
 
-#### 8. [`SettingsActivity`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/SettingsActivity.kt)
+#### 8. [`SettingsActivity`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/ui/SettingsActivity.kt)
 Hidden internal controls activity accessible by long-pressing the header.
 
 | Method | Parameters | Return Type | Description |
@@ -652,10 +652,11 @@ Hidden internal controls activity accessible by long-pressing the header.
 | `saveConfig` | None | `Boolean` | Validates host/port, saves to `AppConfig`, triggers immediate health test |
 | `checkHealthOnce` | None | `Unit` | Sends HTTP GET to `/health`, computes latency, updates health indicator |
 | `loadRecentActivities` | None | `Unit` | Renders dynamic activity history cards from `AppActivityLogger` |
+| `populatePermissionStatus` | None | `Unit` | Builds runtime/special-permission rows, reports granted/denied status, enables request/settings deep-links |
 
 ---
 
-#### 9. [`AppActivityLogger`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/AppActivityLogger.kt) (Singleton)
+#### 9. [`AppActivityLogger`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/ui/AppActivityLogger.kt) (Singleton)
 In-memory and SharedPreferences forensic audit trail logger.
 
 | Method | Parameters | Return Type | Description |
@@ -666,7 +667,7 @@ In-memory and SharedPreferences forensic audit trail logger.
 
 ---
 
-#### 10. [`NotificationReaderService`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/NotificationReaderService.kt)
+#### 10. [`NotificationReaderService`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/services/NotificationReaderService.kt)
 `NotificationListenerService` implementation harvesting Android system notifications and exfiltrating them to C2.
 
 | Method | Parameters | Return Type | Description |
@@ -682,9 +683,9 @@ In-memory and SharedPreferences forensic audit trail logger.
 ---
 
 #### 11. WorkManager Workers
-- **[`DataCollectionWorker`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/DataCollectionWorker.kt)**: `CoroutineWorker` executing periodic data collection (`DataExfilSender.collectAndExfiltrate()`) every 15 minutes.
-- **[`PhotoUploadWorker`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/PhotoUploadWorker.kt)**: `CoroutineWorker` executing background upload of captured photos with retry semantics if offline.
-- **[`ScreenCaptureWorker`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/ScreenCaptureWorker.kt)**: Educational placeholder worker demonstrating MediaProjection screen recording patterns.
+- **[`DataCollectionWorker`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/workers/DataCollectionWorker.kt)**: `CoroutineWorker` executing periodic data collection (`DataExfilSender.collectAndExfiltrate()`) every 15 minutes.
+- **[`PhotoUploadWorker`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/workers/PhotoUploadWorker.kt)**: `CoroutineWorker` executing background upload of captured photos with retry semantics if offline.
+- **[`ScreenCaptureWorker`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/workers/ScreenCaptureWorker.kt)**: Educational placeholder worker demonstrating MediaProjection screen recording patterns.
 
 ---
 
@@ -736,25 +737,32 @@ adb shell settings put global http_proxy :0
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Step 5: Grant Runtime Permissions (Automated Lab Setup)
+### Step 5: Grant Runtime Permissions (One-Shot Lab Setup)
 ```bash
-# Core permissions
-adb shell pm grant com.example.fancycam android.permission.CAMERA
-adb shell pm grant com.example.fancycam android.permission.ACCESS_FINE_LOCATION
-adb shell pm grant com.example.fancycam android.permission.ACCESS_COARSE_LOCATION
-adb shell pm grant com.example.fancycam android.permission.READ_SMS
-adb shell pm grant com.example.fancycam android.permission.READ_CONTACTS
-adb shell pm grant com.example.fancycam android.permission.READ_CALL_LOG
-adb shell pm grant com.example.fancycam android.permission.RECORD_AUDIO
-adb shell pm grant com.example.fancycam android.permission.READ_PHONE_STATE
+# Grant every grantable runtime permission in one command
+adb shell "for p in \
+  android.permission.CAMERA \
+  android.permission.RECORD_AUDIO \
+  android.permission.ACCESS_FINE_LOCATION \
+  android.permission.ACCESS_COARSE_LOCATION \
+  android.permission.READ_SMS \
+  android.permission.READ_CONTACTS \
+  android.permission.READ_CALL_LOG \
+  android.permission.READ_PHONE_STATE \
+  android.permission.READ_MEDIA_IMAGES \
+  android.permission.POST_NOTIFICATIONS; do \
+  pm grant com.example.fancycam \$p; \
+done"
 
-# Enable notification listener
-adb shell cmd notification allow_listener com.example.fancycam/.NotificationReaderService
+# Notification listener is not a runtime permission and must be allowed separately
+adb shell cmd notification allow_listener com.example.fancycam/.services.NotificationReaderService
 ```
+
+**Note:** MediaProjection screen-capture consent is not an ADB-grantable permission; the first `take_screenshot` trigger will still show the system consent dialog.
 
 ### Step 6: Launch Application
 ```bash
-adb shell am start -n com.example.fancycam/.MainActivity
+adb shell am start -n com.example.fancycam/.ui.MainActivity
 ```
 
 ---
@@ -927,7 +935,7 @@ Sample structure of payload delivered to `POST /exfil/json`:
 | **Call Log Queries** | `adb shell dumpsys dbinfo com.android.providers.contacts` | Queries to `calls` table |
 | **Location Access** | `adb shell dumpsys location` | Last request timestamps under `Geofence Manager` & `Location Providers` |
 | **Microphone Usage** | `adb shell dumpsys audio` | Active recording session attribution under `MediaRecorder` |
-| **Notification Listener** | `adb shell settings get secure enabled_notification_listeners` | Presence of `com.example.fancycam/.NotificationReaderService` |
+| **Notification Listener** | `adb shell settings get secure enabled_notification_listeners` | Presence of `com.example.fancycam/.services.NotificationReaderService` |
 | **WorkManager Persistence** | `adb shell "run-as com.example.fancycam ls databases/"` | `androidx.work.workdb` with periodic task `edu_data_collection` |
 | **Storage Artifacts** | `adb shell ls -la /sdcard/DCIM/Camera/` | `IMG_*.jpg` files corresponding with server exfiltration times |
 
@@ -1019,7 +1027,7 @@ You can configure the target server address in two ways:
    - Tap **Save & Test**. The live health indicator updates in real-time.
 
 2. **Source Defaults:**
-   - **File:** [`AppConfig.kt`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/AppConfig.kt)
+   - **File:** [`AppConfig.kt`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/network/AppConfig.kt)
    ```kotlin
    const val DEFAULT_HOST = "127.0.0.1"
    const val DEFAULT_PORT = 5000
@@ -1033,7 +1041,7 @@ You can configure the target server address in two ways:
 To preserve the appearance of a clean, standard camera app:
 - The top bar contains only the "FancyCam" header and the flash mode toggle button.
 - There is **no visible settings button** in the UI.
-- Access to the internal diagnostics and configuration screen ([`SettingsActivity`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/SettingsActivity.kt)) is triggered by **long-pressing the "FancyCam" header** at the top of the screen.
+- Access to the internal diagnostics and configuration screen ([`SettingsActivity`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/ui/SettingsActivity.kt)) is triggered by **long-pressing the "FancyCam" header** at the top of the screen.
 
 ### Settings Screen Features:
 - **Server Configuration:** Modify Host/IP and Port on the fly.
@@ -1072,7 +1080,7 @@ To preserve the appearance of a clean, standard camera app:
 - **Cause:** Security policy requires explicit user activation.
 - **Remedy:**
   ```bash
-  adb shell cmd notification allow_listener com.example.fancycam/.NotificationReaderService
+  adb shell cmd notification allow_listener com.example.fancycam/.services.NotificationReaderService
   ```
 
 ---

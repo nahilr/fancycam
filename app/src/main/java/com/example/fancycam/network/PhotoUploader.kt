@@ -1,5 +1,6 @@
-package com.example.fancycam
+package com.example.fancycam.network
 
+import com.example.fancycam.ui.AppActivityLogger
 import android.content.Context
 import android.provider.Settings
 import android.util.Log

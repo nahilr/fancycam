@@ -1,4 +1,4 @@
-package com.example.fancycam
+package com.example.fancycam.ui
 
 import android.content.Context
 import android.content.SharedPreferences

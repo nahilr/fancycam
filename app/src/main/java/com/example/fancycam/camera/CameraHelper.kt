@@ -1,4 +1,4 @@
-package com.example.fancycam
+package com.example.fancycam.camera
 
 import android.content.Context
 import android.graphics.Bitmap

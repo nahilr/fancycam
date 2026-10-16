@@ -1,5 +1,6 @@
-package com.example.fancycam
+package com.example.fancycam.workers
 
+import com.example.fancycam.network.PhotoUploader
 import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker

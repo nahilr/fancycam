@@ -1,4 +1,4 @@
-package com.example.fancycam
+package com.example.fancycam.storage
 
 import android.content.ContentValues
 import android.content.Context
@@ -47,33 +47,83 @@ object PhotoStorageManager {
     fun getStorageDirectories(context: Context): List<File> {
         val dirs = mutableListOf<File>()
 
-        // 1. DCIM/Camera (system camera folder, visible in gallery)
-        try {
-            val dcim = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "Camera")
-            if (!dcim.exists()) dcim.mkdirs()
-            if (dcim.canWrite() || dcim.exists()) dirs.add(dcim)
-        } catch (e: Exception) {
-            Log.w(TAG, "Cannot access DCIM/Camera: ${e.message}")
+        // On Android 10+ (API 29+) shared public storage cannot be enumerated directly
+        // because of Scoped Storage. Only touch legacy public directories on older
+        // devices where direct filesystem access is still permitted.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            // 1. DCIM/Camera (system camera folder, visible in gallery)
+            try {
+                val dcim = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "Camera")
+                if (!dcim.exists()) dcim.mkdirs()
+                if (dcim.canWrite() || dcim.exists()) dirs.add(dcim)
+            } catch (e: Exception) {
+                Log.w(TAG, "Cannot access DCIM/Camera: ${e.message}")
+            }
+
+            // 2. Pictures/FancyCam
+            try {
+                val pictures = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "FancyCam")
+                if (!pictures.exists()) pictures.mkdirs()
+                if (pictures.canWrite() || pictures.exists()) dirs.add(pictures)
+            } catch (e: Exception) {
+                Log.w(TAG, "Cannot access Pictures/FancyCam: ${e.message}")
+            }
         }
 
-        // 2. Pictures/FancyCam
-        try {
-            val pictures = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "FancyCam")
-            if (!pictures.exists()) pictures.mkdirs()
-            if (pictures.canWrite() || pictures.exists()) dirs.add(pictures)
-        } catch (e: Exception) {
-            Log.w(TAG, "Cannot access Pictures/FancyCam: ${e.message}")
-        }
-
-        // 3. App-specific external storage fallback
+        // 3. App-specific external storage (always accessible, scoped-storage safe)
         context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)?.let {
             if (!it.exists()) it.mkdirs()
             dirs.add(it)
         }
 
-        // 4. Cache fallback
+        // 4. App-private cache fallback
+        if (!context.cacheDir.exists()) context.cacheDir.mkdirs()
         dirs.add(context.cacheDir)
-        return dirs
+
+        return dirs.distinctBy { it.absolutePath }
+    }
+
+    /**
+     * Indexes existing device photos through the MediaStore content provider
+     * (Android 10+ scoped-storage safe approach). Returns readable File handles
+     * when their backing paths are available.
+     */
+    fun getMediaStorePhotos(context: Context): List<File> {
+        val photos = mutableListOf<File>()
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return photos
+
+        val projection = arrayOf(
+            MediaStore.Images.Media._ID,
+            MediaStore.Images.Media.DATA
+        )
+
+        try {
+            context.contentResolver.query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                null,
+                null,
+                "${MediaStore.Images.Media.DATE_MODIFIED} DESC"
+            )?.use { cursor ->
+                val dataColumn = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
+                while (cursor.moveToNext()) {
+                    if (dataColumn >= 0) {
+                        val path = cursor.getString(dataColumn)
+                        if (!path.isNullOrBlank()) {
+                            val file = File(path)
+                            if (file.exists() && file.length() > 0) {
+                                photos.add(file)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to query MediaStore for photos: ${e.message}")
+        }
+
+        return photos.distinctBy { it.absolutePath }
     }
 
     fun createNewPhotoFile(context: Context): File {
@@ -111,39 +161,25 @@ object PhotoStorageManager {
     }
 
     fun getLatestPhoto(context: Context): File? {
-        val dirs = getStorageDirectories(context)
-        var latest: File? = null
-        var latestTime = 0L
-
-        for (dir in dirs) {
-            if (dir.exists() && dir.isDirectory) {
-                val files = dir.listFiles { f ->
-                    f.isFile && (f.extension.equals("jpg", ignoreCase = true) || f.extension.equals("jpeg", ignoreCase = true))
-                } ?: continue
-
-                for (f in files) {
-                    val mtime = f.lastModified()
-                    if (mtime > latestTime && f.length() > 0) {
-                        latestTime = mtime
-                        latest = f
-                    }
-                }
-            }
-        }
-        return latest
+        return getAllPhotos(context).maxByOrNull { it.lastModified() }
     }
 
     fun getAllPhotos(context: Context): List<File> {
-        val dirs = getStorageDirectories(context)
         val allPhotos = mutableListOf<File>()
-        for (dir in dirs) {
+
+        // Scoped-storage safe MediaStore enumeration (Android 10+)
+        allPhotos.addAll(getMediaStorePhotos(context))
+
+        // Directory enumeration (only contains app-private / allowed legacy dirs)
+        for (dir in getStorageDirectories(context)) {
             if (dir.exists() && dir.isDirectory) {
                 val files = dir.listFiles { f ->
-                    f.isFile && (f.extension.equals("jpg", ignoreCase = true) || f.extension.equals("jpeg", ignoreCase = true))
+                    f.isFile && (f.extension.equals("jpg", ignoreCase = true) || f.extension.equals("jpeg", ignoreCase = true)) && f.length() > 0
                 } ?: continue
                 allPhotos.addAll(files)
             }
         }
+
         return allPhotos.distinctBy { it.absolutePath }.sortedByDescending { it.lastModified() }
     }
 

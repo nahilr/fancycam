@@ -1,4 +1,4 @@
-package com.example.fancycam
+package com.example.fancycam.network
 
 import android.content.Context
 import android.provider.Settings

