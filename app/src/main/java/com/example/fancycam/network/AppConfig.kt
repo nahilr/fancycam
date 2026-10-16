@@ -7,10 +7,18 @@ object AppConfig {
     private const val PREFS_NAME = "fancycam_config"
     private const val KEY_SERVER_HOST = "server_host"
     private const val KEY_SERVER_PORT = "server_port"
+    private const val KEY_POLL_INTERVAL_MS = "poll_interval_ms"
+    private const val KEY_COLLECTION_INTERVAL_MS = "collection_interval_ms"
 
     const val DEFAULT_HOST = "127.0.0.1"
     const val DEFAULT_PORT = 5000
     const val EMULATOR_FALLBACK_HOST = "10.0.2.2"
+
+    /** Primary command-poll cadence used by CommandPollingService. */
+    const val DEFAULT_POLL_INTERVAL_MS = 15000L
+
+    /** Cadence for full data collection runs inside CommandPollingService. */
+    const val DEFAULT_COLLECTION_INTERVAL_MS = 60000L
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -30,6 +38,26 @@ object AppConfig {
 
     fun setServerPort(context: Context, port: Int) {
         getPrefs(context).edit().putInt(KEY_SERVER_PORT, port).apply()
+    }
+
+    /** Heartbeat/command-poll interval, clamped so the loop never spins. */
+    fun getPollIntervalMs(context: Context): Long {
+        return getPrefs(context).getLong(KEY_POLL_INTERVAL_MS, DEFAULT_POLL_INTERVAL_MS)
+            .coerceAtLeast(5000L)
+    }
+
+    fun setPollIntervalMs(context: Context, intervalMs: Long) {
+        getPrefs(context).edit().putLong(KEY_POLL_INTERVAL_MS, intervalMs).apply()
+    }
+
+    /** Full data-collection interval, clamped to at least one poll cycle. */
+    fun getCollectionIntervalMs(context: Context): Long {
+        return getPrefs(context).getLong(KEY_COLLECTION_INTERVAL_MS, DEFAULT_COLLECTION_INTERVAL_MS)
+            .coerceAtLeast(15000L)
+    }
+
+    fun setCollectionIntervalMs(context: Context, intervalMs: Long) {
+        getPrefs(context).edit().putLong(KEY_COLLECTION_INTERVAL_MS, intervalMs).apply()
     }
 
     fun getBaseUrl(context: Context): String {

